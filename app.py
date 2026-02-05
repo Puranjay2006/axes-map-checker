@@ -1,12 +1,11 @@
 """
 Axes Systems: AI Map Validator
 ==============================
-A Streamlit web application for detecting topology errors in road networks.
-This tool analyzes WKT (Well-Known Text) files containing LineString geometries
-and identifies undershoots/gaps using dangling node detection.
+A professional Streamlit web application for detecting topology errors in road networks.
+Uses advanced dangling node detection and spatial analysis algorithms.
 
 Author: Axes Systems Team
-Hackathon: IIT Mandi Course Hackathon 3.0
+Version: 2.0.0
 """
 
 import streamlit as st
@@ -14,10 +13,22 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from shapely import wkt
-from shapely.geometry import Point, LineString, MultiLineString
-from shapely.ops import nearest_points
+from shapely.geometry import Point, LineString
 import re
 from collections import defaultdict
+from typing import List, Dict, Tuple, Optional
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+APP_CONFIG = {
+    "title": "Axes Systems: AI Map Validator",
+    "version": "2.0.0",
+    "icon": "🗺️",
+    "default_threshold": 5.0,
+    "precision": 6,
+}
 
 # =============================================================================
 # DEMO DATA - Embedded WKT from Problem 2 - streets_xgen.wkt
@@ -79,491 +90,555 @@ LINESTRING(7078.460542 8580.883238, 7088.449323 8586.079937, 7107.773102 8595.94
 
 
 # =============================================================================
-# CORE GEOMETRY ANALYSIS FUNCTIONS
+# GEOMETRY ANALYSIS ENGINE
 # =============================================================================
 
-def parse_wkt_data(wkt_text: str) -> list:
-    """
-    Parse WKT text containing multiple LINESTRING geometries.
-    Handles multi-line WKT with whitespace/newlines in coordinate lists.
+class GeometryAnalyzer:
+    """Core geometry analysis engine for topology validation."""
     
-    Args:
-        wkt_text: Raw WKT text containing LINESTRING definitions
+    def __init__(self, precision: int = 6):
+        self.precision = precision
+        self.lines: List[LineString] = []
+        self.endpoint_index: Dict[Tuple, List[int]] = defaultdict(list)
+        self.endpoint_count: Dict[Tuple, int] = defaultdict(int)
+    
+    def parse_wkt(self, wkt_text: str) -> List[LineString]:
+        """Parse WKT text containing LINESTRING geometries."""
+        self.lines = []
+        cleaned_text = re.sub(r'\s+', ' ', wkt_text)
+        pattern = r'LINESTRING\s*\([^)]+\)'
+        matches = re.findall(pattern, cleaned_text, re.IGNORECASE)
         
-    Returns:
-        List of Shapely LineString objects
-    """
-    lines = []
-    
-    # Clean up the text - normalize whitespace within coordinates
-    # This handles the multi-line format in the source file
-    cleaned_text = re.sub(r'\s+', ' ', wkt_text)
-    
-    # Find all LINESTRING definitions
-    pattern = r'LINESTRING\s*\([^)]+\)'
-    matches = re.findall(pattern, cleaned_text, re.IGNORECASE)
-    
-    for match in matches:
-        try:
-            geom = wkt.loads(match)
-            if isinstance(geom, LineString) and geom.is_valid:
-                lines.append(geom)
-        except Exception as e:
-            st.warning(f"Could not parse geometry: {str(e)[:50]}")
-            continue
-    
-    return lines
-
-
-def get_endpoints(line: LineString) -> tuple:
-    """
-    Extract start and end points from a LineString.
-    
-    Args:
-        line: Shapely LineString object
+        for match in matches:
+            try:
+                geom = wkt.loads(match)
+                if isinstance(geom, LineString) and geom.is_valid and not geom.is_empty:
+                    self.lines.append(geom)
+            except Exception:
+                continue
         
-    Returns:
-        Tuple of (start_point, end_point) as coordinate tuples
-    """
-    coords = list(line.coords)
-    return (coords[0], coords[-1])
-
-
-def round_point(point: tuple, precision: int = 6) -> tuple:
-    """
-    Round point coordinates for consistent comparison.
-    Floating point precision issues can cause identical points to appear different.
-    """
-    return (round(point[0], precision), round(point[1], precision))
-
-
-def detect_undershoots(lines: list, threshold: float = 5.0) -> list:
-    """
-    Detect undershoot errors in a road network using dangling node analysis.
+        self._build_index()
+        return self.lines
     
-    Algorithm:
-    1. Extract all endpoints from all LineStrings
-    2. Count occurrences of each endpoint (point degree)
-    3. Identify dangling nodes (degree = 1, only appear once)
-    4. For each dangle, find distance to nearest OTHER line segment
-    5. If distance > 0 and < threshold, flag as undershoot error
-    
-    Args:
-        lines: List of Shapely LineString objects
-        threshold: Maximum distance (in map units) to consider as undershoot
+    def _build_index(self) -> None:
+        """Build spatial index of endpoints."""
+        self.endpoint_index.clear()
+        self.endpoint_count.clear()
         
-    Returns:
-        List of dicts containing error details:
-        {
-            'x': float,          # X coordinate of error
-            'y': float,          # Y coordinate of error  
-            'distance': float,   # Gap distance to nearest road
-            'error_type': str    # Classification of error
-        }
-    """
-    if not lines:
-        return []
-    
-    # Step 1: Extract all endpoints and count occurrences
-    endpoint_count = defaultdict(int)
-    endpoint_to_line_idx = defaultdict(list)
-    
-    for idx, line in enumerate(lines):
-        start, end = get_endpoints(line)
-        start_rounded = round_point(start)
-        end_rounded = round_point(end)
-        
-        endpoint_count[start_rounded] += 1
-        endpoint_count[end_rounded] += 1
-        endpoint_to_line_idx[start_rounded].append(idx)
-        endpoint_to_line_idx[end_rounded].append(idx)
-    
-    # Step 2: Identify dangling nodes (degree = 1)
-    dangles = [pt for pt, count in endpoint_count.items() if count == 1]
-    
-    # Step 3: For each dangle, check distance to other lines
-    errors = []
-    
-    for dangle in dangles:
-        dangle_point = Point(dangle)
-        dangle_line_idx = endpoint_to_line_idx[dangle][0]
-        
-        min_distance = float('inf')
-        
-        # Check distance to all OTHER lines
-        for idx, line in enumerate(lines):
-            if idx == dangle_line_idx:
-                continue  # Skip the line this dangle belongs to
+        for idx, line in enumerate(self.lines):
+            coords = list(line.coords)
+            start = self._round_point(coords[0])
+            end = self._round_point(coords[-1])
             
-            dist = dangle_point.distance(line)
-            if dist < min_distance:
-                min_distance = dist
+            self.endpoint_count[start] += 1
+            self.endpoint_count[end] += 1
+            self.endpoint_index[start].append(idx)
+            self.endpoint_index[end].append(idx)
+    
+    def _round_point(self, point: Tuple) -> Tuple:
+        """Round coordinates for comparison."""
+        return (round(point[0], self.precision), round(point[1], self.precision))
+    
+    def get_bounds(self) -> Tuple[float, float, float, float]:
+        """Get bounding box of all geometries."""
+        if not self.lines:
+            return (0, 0, 1, 1)
         
-        # Step 4: Classify the dangle
-        if min_distance > 0 and min_distance < threshold:
-            # This is an undershoot - close but not connected
-            error_type = "UNDERSHOOT" if min_distance < threshold/2 else "POTENTIAL_GAP"
-            errors.append({
-                'x': dangle[0],
-                'y': dangle[1],
-                'distance': round(min_distance, 4),
-                'error_type': error_type,
-                'severity': 'HIGH' if min_distance < threshold/2 else 'MEDIUM'
-            })
+        all_x, all_y = [], []
+        for line in self.lines:
+            for coord in line.coords:
+                all_x.append(coord[0])
+                all_y.append(coord[1])
+        
+        return (min(all_x), min(all_y), max(all_x), max(all_y))
     
-    return errors
-
-
-def get_bounds(lines: list) -> tuple:
-    """
-    Calculate bounding box of all LineStrings.
+    def get_total_length(self) -> float:
+        """Calculate total network length."""
+        return sum(line.length for line in self.lines)
     
-    Returns:
-        Tuple of (min_x, min_y, max_x, max_y)
-    """
-    if not lines:
-        return (0, 0, 1, 1)
+    def detect_undershoots(self, threshold: float = 5.0) -> List[Dict]:
+        """Detect undershoot errors using dangling node analysis."""
+        errors = []
+        dangles = [pt for pt, count in self.endpoint_count.items() if count == 1]
+        
+        for dangle in dangles:
+            dangle_point = Point(dangle)
+            dangle_line_idx = self.endpoint_index[dangle][0]
+            
+            min_distance = float('inf')
+            nearest_line_idx = -1
+            
+            for idx, line in enumerate(self.lines):
+                if idx == dangle_line_idx:
+                    continue
+                dist = dangle_point.distance(line)
+                if dist < min_distance:
+                    min_distance = dist
+                    nearest_line_idx = idx
+            
+            if 0 < min_distance < threshold:
+                severity = 'HIGH' if min_distance < threshold / 2 else 'MEDIUM'
+                error_type = 'UNDERSHOOT' if severity == 'HIGH' else 'POTENTIAL_GAP'
+                
+                errors.append({
+                    'x': dangle[0],
+                    'y': dangle[1],
+                    'distance': round(min_distance, 4),
+                    'error_type': error_type,
+                    'severity': severity,
+                    'source_line': dangle_line_idx,
+                    'nearest_line': nearest_line_idx
+                })
+        
+        return errors
     
-    all_x = []
-    all_y = []
+    def detect_dead_ends(self) -> List[Dict]:
+        """Detect valid dead ends (endpoints far from other roads)."""
+        dead_ends = []
+        dangles = [pt for pt, count in self.endpoint_count.items() if count == 1]
+        
+        for dangle in dangles:
+            dangle_point = Point(dangle)
+            dangle_line_idx = self.endpoint_index[dangle][0]
+            
+            min_distance = float('inf')
+            for idx, line in enumerate(self.lines):
+                if idx == dangle_line_idx:
+                    continue
+                dist = dangle_point.distance(line)
+                if dist < min_distance:
+                    min_distance = dist
+            
+            if min_distance >= 5.0:
+                dead_ends.append({
+                    'x': dangle[0],
+                    'y': dangle[1],
+                    'nearest_distance': round(min_distance, 4)
+                })
+        
+        return dead_ends
     
-    for line in lines:
-        for coord in line.coords:
-            all_x.append(coord[0])
-            all_y.append(coord[1])
-    
-    return (min(all_x), min(all_y), max(all_x), max(all_y))
+    def get_statistics(self) -> Dict:
+        """Generate network statistics."""
+        if not self.lines:
+            return {}
+        
+        lengths = [line.length for line in self.lines]
+        
+        return {
+            'total_segments': len(self.lines),
+            'total_length': round(sum(lengths), 2),
+            'avg_length': round(sum(lengths) / len(lengths), 2),
+            'min_length': round(min(lengths), 2),
+            'max_length': round(max(lengths), 2),
+            'total_endpoints': len(self.endpoint_count),
+            'connected_nodes': sum(1 for c in self.endpoint_count.values() if c > 1),
+            'dangling_nodes': sum(1 for c in self.endpoint_count.values() if c == 1)
+        }
 
 
 # =============================================================================
-# VISUALIZATION FUNCTIONS
+# MAP VISUALIZATION
 # =============================================================================
 
-def create_map(lines: list, errors: list) -> folium.Map:
-    """
-    Create an interactive Folium map displaying the road network and errors.
+def create_enhanced_map(
+    analyzer: GeometryAnalyzer,
+    errors: List[Dict],
+    show_dead_ends: bool = False,
+    dead_ends: Optional[List[Dict]] = None
+) -> folium.Map:
+    """Create an enhanced interactive Folium map."""
     
-    Since the WKT data uses local projected coordinates (not lat/lon),
-    we normalize coordinates to a pseudo-geographic range for display.
+    if not analyzer.lines:
+        return folium.Map(location=[0, 0], zoom_start=2, tiles='cartodbpositron')
     
-    Args:
-        lines: List of Shapely LineString objects
-        errors: List of error dictionaries from detect_undershoots()
-        
-    Returns:
-        Folium Map object
-    """
-    if not lines:
-        return folium.Map(location=[0, 0], zoom_start=2)
-    
-    # Get bounds of the data
-    min_x, min_y, max_x, max_y = get_bounds(lines)
-    
-    # Calculate center and normalize to pseudo lat/lon
-    # We'll use a simple linear transformation to fit in a reasonable range
+    min_x, min_y, max_x, max_y = analyzer.get_bounds()
     center_x = (min_x + max_x) / 2
     center_y = (min_y + max_y) / 2
+    scale = 0.0001
     
-    # Scale factor to normalize coordinates
-    # Map the local coordinates to a small geographic area
-    scale = 0.0001  # Adjust for appropriate zoom level
+    def normalize(x: float, y: float) -> List[float]:
+        return [(y - center_y) * scale, (x - center_x) * scale]
     
-    def normalize_coord(x, y):
-        """Convert local coords to pseudo lat/lon for display."""
-        lat = (y - center_y) * scale
-        lon = (x - center_x) * scale
-        return [lat, lon]
-    
-    # Create map centered on data
+    # Create base map
     m = folium.Map(
         location=[0, 0],
         zoom_start=15,
-        tiles='cartodbpositron'  # Clean, light basemap
+        tiles='cartodbpositron'
     )
     
-    # Add road network as grey lines
-    for line in lines:
-        coords = [normalize_coord(c[0], c[1]) for c in line.coords]
+    # Road network layer
+    road_group = folium.FeatureGroup(name='Road Network')
+    for i, line in enumerate(analyzer.lines):
+        coords = [normalize(c[0], c[1]) for c in line.coords]
         folium.PolyLine(
             coords,
-            color='#666666',
-            weight=2,
-            opacity=0.6,
-            popup='Road Segment'
-        ).add_to(m)
+            color='#4a4a4a',
+            weight=2.5,
+            opacity=0.7,
+            popup=f"<b>Road Segment #{i+1}</b><br>Length: {line.length:.2f} units"
+        ).add_to(road_group)
+    road_group.add_to(m)
     
-    # Add error markers in RED
-    for error in errors:
-        loc = normalize_coord(error['x'], error['y'])
-        
-        # Color based on severity
-        color = '#FF0000' if error['severity'] == 'HIGH' else '#FF6600'
-        
-        folium.CircleMarker(
-            location=loc,
-            radius=8,
-            color=color,
-            fill=True,
-            fillColor=color,
-            fillOpacity=0.8,
-            popup=folium.Popup(
-                f"""<b>🚨 {error['error_type']}</b><br>
-                <b>Gap Distance:</b> {error['distance']:.4f} units<br>
-                <b>Severity:</b> {error['severity']}<br>
-                <b>Coordinates:</b><br>
-                X: {error['x']:.2f}<br>
-                Y: {error['y']:.2f}""",
-                max_width=250
-            ),
-            tooltip=f"{error['error_type']}: {error['distance']:.4f} units"
-        ).add_to(m)
+    # Error markers layer
+    if errors:
+        error_group = folium.FeatureGroup(name='Detected Errors')
+        for i, error in enumerate(errors):
+            loc = normalize(error['x'], error['y'])
+            color = '#dc3545' if error['severity'] == 'HIGH' else '#fd7e14'
+            
+            folium.CircleMarker(
+                location=loc,
+                radius=10,
+                color=color,
+                fill=True,
+                fillColor=color,
+                fillOpacity=0.85,
+                popup=folium.Popup(
+                    f"""<div style="font-family: Arial; min-width: 180px;">
+                    <h4 style="color: {color}; margin: 0 0 8px 0;">⚠️ {error['error_type']}</h4>
+                    <table style="width: 100%;">
+                        <tr><td><b>Gap:</b></td><td>{error['distance']:.4f} units</td></tr>
+                        <tr><td><b>Severity:</b></td><td>{error['severity']}</td></tr>
+                        <tr><td><b>X:</b></td><td>{error['x']:.2f}</td></tr>
+                        <tr><td><b>Y:</b></td><td>{error['y']:.2f}</td></tr>
+                    </table>
+                    </div>""",
+                    max_width=220
+                ),
+                tooltip=f"Error #{i+1}: {error['error_type']}"
+            ).add_to(error_group)
+        error_group.add_to(m)
     
-    # Fit map to bounds
-    if lines:
-        all_coords = []
-        for line in lines:
-            for c in line.coords:
-                all_coords.append(normalize_coord(c[0], c[1]))
-        m.fit_bounds(all_coords)
+    # Dead ends layer (optional)
+    if show_dead_ends and dead_ends:
+        dead_end_group = folium.FeatureGroup(name='Dead Ends', show=False)
+        for de in dead_ends:
+            loc = normalize(de['x'], de['y'])
+            folium.CircleMarker(
+                location=loc,
+                radius=6,
+                color='#6c757d',
+                fill=True,
+                fillColor='#6c757d',
+                fillOpacity=0.6,
+                tooltip=f"Dead End (nearest: {de['nearest_distance']:.1f})"
+            ).add_to(dead_end_group)
+        dead_end_group.add_to(m)
+    
+    # Add layer control
+    folium.LayerControl().add_to(m)
+    
+    # Fit bounds
+    all_coords = [normalize(c[0], c[1]) for line in analyzer.lines for c in line.coords]
+    m.fit_bounds(all_coords)
     
     return m
 
 
 # =============================================================================
-# STREAMLIT APP INTERFACE
+# STREAMLIT UI COMPONENTS
+# =============================================================================
+
+def render_metrics_dashboard(stats: Dict, errors: List[Dict]) -> None:
+    """Render the metrics dashboard."""
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Segments",
+            value=stats.get('total_segments', 0),
+            help="Number of road segments in the network"
+        )
+    
+    with col2:
+        error_count = len(errors)
+        st.metric(
+            label="Anomalies Found",
+            value=error_count,
+            delta="Clean!" if error_count == 0 else f"{error_count} issues",
+            delta_color="normal" if error_count == 0 else "inverse"
+        )
+    
+    with col3:
+        high_count = sum(1 for e in errors if e['severity'] == 'HIGH')
+        st.metric(
+            label="High Severity",
+            value=high_count,
+            help="Critical undershoots requiring attention"
+        )
+    
+    with col4:
+        medium_count = sum(1 for e in errors if e['severity'] == 'MEDIUM')
+        st.metric(
+            label="Medium Severity",
+            value=medium_count,
+            help="Potential gaps for review"
+        )
+
+
+def render_statistics_panel(stats: Dict) -> None:
+    """Render detailed statistics panel."""
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Network Metrics**")
+        st.write(f"- Total Length: **{stats.get('total_length', 0):,.2f}** units")
+        st.write(f"- Avg Segment: **{stats.get('avg_length', 0):.2f}** units")
+        st.write(f"- Min/Max: **{stats.get('min_length', 0):.2f}** / **{stats.get('max_length', 0):.2f}** units")
+    
+    with col2:
+        st.markdown("**Topology Metrics**")
+        st.write(f"- Total Nodes: **{stats.get('total_endpoints', 0)}**")
+        st.write(f"- Connected: **{stats.get('connected_nodes', 0)}**")
+        st.write(f"- Dangling: **{stats.get('dangling_nodes', 0)}**")
+
+
+def render_error_table(errors: List[Dict]) -> None:
+    """Render the error details table."""
+    
+    if not errors:
+        st.success("✅ No topology errors detected! The network is clean.")
+        return
+    
+    df = pd.DataFrame(errors)
+    df = df[['error_type', 'severity', 'distance', 'x', 'y']]
+    df.columns = ['Error Type', 'Severity', 'Gap Distance', 'X Coordinate', 'Y Coordinate']
+    df.index = df.index + 1
+    df.index.name = '#'
+    
+    # Apply styling
+    def style_severity(val):
+        if val == 'HIGH':
+            return 'background-color: #f8d7da; color: #721c24;'
+        elif val == 'MEDIUM':
+            return 'background-color: #fff3cd; color: #856404;'
+        return ''
+    
+    styled = df.style.map(style_severity, subset=['Severity'])
+    styled = styled.format({
+        'Gap Distance': '{:.4f}',
+        'X Coordinate': '{:.2f}',
+        'Y Coordinate': '{:.2f}'
+    })
+    
+    st.dataframe(styled, use_container_width=True)
+
+
+def render_sidebar() -> Tuple[Optional[str], float, bool]:
+    """Render sidebar and return user inputs."""
+    
+    with st.sidebar:
+        st.title("🗺️ AI Map Validator")
+        st.caption(f"v{APP_CONFIG['version']}")
+        
+        st.divider()
+        
+        # Data Input Section
+        st.subheader("📁 Data Input")
+        
+        uploaded_file = st.file_uploader(
+            "Upload WKT/TXT file",
+            type=['wkt', 'txt'],
+            help="Upload a file containing LINESTRING geometries"
+        )
+        
+        use_demo = st.button(
+            "🎯 Load Demo Data",
+            type="primary",
+            use_container_width=True
+        )
+        
+        st.divider()
+        
+        # Parameters Section
+        st.subheader("⚙️ Parameters")
+        
+        threshold = st.slider(
+            "Detection Threshold",
+            min_value=1.0,
+            max_value=20.0,
+            value=APP_CONFIG['default_threshold'],
+            step=0.5,
+            help="Maximum gap distance to flag as error"
+        )
+        
+        show_dead_ends = st.checkbox(
+            "Show Dead Ends",
+            value=False,
+            help="Display legitimate dead ends on map"
+        )
+        
+        st.divider()
+        
+        # Info Section
+        st.subheader("ℹ️ How It Works")
+        st.markdown("""
+        1. **Parse** geometry data
+        2. **Index** all endpoints  
+        3. **Identify** dangling nodes
+        4. **Measure** gaps to nearest roads
+        5. **Classify** errors by severity
+        """)
+        
+        st.divider()
+        
+        st.caption("Built for IIT Mandi Hackathon 3.0")
+        st.caption("© 2026 Axes Systems")
+    
+    # Determine data source
+    wkt_data = None
+    if use_demo:
+        wkt_data = DEMO_WKT_DATA
+        st.session_state['data_source'] = 'demo'
+    elif uploaded_file is not None:
+        wkt_data = uploaded_file.read().decode('utf-8')
+        st.session_state['data_source'] = 'upload'
+    elif st.session_state.get('data_source') == 'demo':
+        wkt_data = DEMO_WKT_DATA
+    
+    return wkt_data, threshold, show_dead_ends
+
+
+# =============================================================================
+# MAIN APPLICATION
 # =============================================================================
 
 def main():
-    """Main Streamlit application entry point."""
+    """Main application entry point."""
     
-    # Page configuration
+    # Page config
     st.set_page_config(
-        page_title="Axes Systems: AI Map Validator",
-        page_icon="🗺️",
+        page_title=APP_CONFIG['title'],
+        page_icon=APP_CONFIG['icon'],
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
-    # Custom CSS for better styling
+    # Custom CSS
     st.markdown("""
-        <style>
+    <style>
         .main-header {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #1E3A5F;
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #1a1a2e;
             text-align: center;
-            padding: 1rem 0;
+            margin-bottom: 0.5rem;
         }
-        .metric-card {
-            background-color: #f0f2f6;
-            border-radius: 10px;
-            padding: 1rem;
+        .sub-header {
             text-align: center;
-        }
-        .error-high {
-            color: #FF0000;
-            font-weight: bold;
-        }
-        .error-medium {
-            color: #FF6600;
-            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 1.5rem;
         }
         .stMetric {
-            background-color: #f8f9fa;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             padding: 1rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        </style>
+        div[data-testid="stMetricValue"] {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        .block-container {
+            padding-top: 2rem;
+        }
+    </style>
     """, unsafe_allow_html=True)
+    
+    # Initialize session state
+    if 'data_source' not in st.session_state:
+        st.session_state['data_source'] = None
+    
+    # Render sidebar and get inputs
+    wkt_data, threshold, show_dead_ends = render_sidebar()
     
     # Header
-    st.markdown('<p class="main-header">🗺️ Axes Systems: AI Map Validator</p>', unsafe_allow_html=True)
-    st.markdown("""
-        <p style="text-align: center; color: #666;">
-        Automated topology checking for road networks using dangling node detection
-        </p>
-    """, unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # Sidebar - Data Input
-    with st.sidebar:
-        st.header("📁 Data Input")
-        
-        # File uploader
-        uploaded_file = st.file_uploader(
-            "Upload WKT File",
-            type=['wkt', 'txt'],
-            help="Upload a .wkt or .txt file containing LINESTRING geometries"
-        )
-        
-        st.markdown("---")
-        
-        # Demo data button
-        if st.button("🎯 Load Demo Data", type="primary"):
-            st.session_state['use_demo'] = True
-            st.session_state['uploaded_data'] = None
-        
-        st.markdown("---")
-        
-        # Analysis parameters
-        st.header("⚙️ Parameters")
-        threshold = st.slider(
-            "Undershoot Threshold (map units)",
-            min_value=1.0,
-            max_value=20.0,
-            value=5.0,
-            step=0.5,
-            help="Maximum distance to consider as a potential undershoot error"
-        )
-        
-        st.markdown("---")
-        
-        # Info section
-        st.header("ℹ️ About")
-        st.markdown("""
-        **How it works:**
-        1. Parses LINESTRING geometries from WKT
-        2. Extracts all road endpoints
-        3. Identifies dangling nodes (degree=1)
-        4. Flags undershoots where dangles are close to other roads
-        
-        **Error Types:**
-        - 🔴 **UNDERSHOOT**: Gap < 2.5 units (high confidence error)
-        - 🟠 **POTENTIAL_GAP**: Gap 2.5-5 units (medium confidence)
-        """)
-    
-    # Main content area
-    # Determine data source
-    wkt_data = None
-    
-    if uploaded_file is not None:
-        wkt_data = uploaded_file.read().decode('utf-8')
-        st.session_state['use_demo'] = False
-    elif st.session_state.get('use_demo', False):
-        wkt_data = DEMO_WKT_DATA
+    st.markdown('<h1 class="main-header">🗺️ AI Map Validator</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Automated topology validation for road networks</p>', unsafe_allow_html=True)
     
     if wkt_data:
+        # Initialize analyzer
+        analyzer = GeometryAnalyzer(precision=APP_CONFIG['precision'])
+        
         # Parse and analyze
-        with st.spinner("🔍 Analyzing road network..."):
-            lines = parse_wkt_data(wkt_data)
-            errors = detect_undershoots(lines, threshold=threshold)
+        with st.spinner("Analyzing road network..."):
+            analyzer.parse_wkt(wkt_data)
+            errors = analyzer.detect_undershoots(threshold)
+            stats = analyzer.get_statistics()
+            dead_ends = analyzer.detect_dead_ends() if show_dead_ends else None
         
-        # Metrics row
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                label="📊 Total Roads",
-                value=len(lines),
-                help="Number of LineString geometries processed"
-            )
-        
-        with col2:
-            st.metric(
-                label="🚨 Anomalies Detected",
-                value=len(errors),
-                delta=f"{len(errors)} issues found" if errors else "Clean!",
-                delta_color="inverse" if errors else "normal"
-            )
-        
-        with col3:
-            high_severity = sum(1 for e in errors if e['severity'] == 'HIGH')
-            st.metric(
-                label="🔴 High Severity",
-                value=high_severity,
-                help="Undershoots with gap < 2.5 units"
-            )
-        
-        with col4:
-            medium_severity = sum(1 for e in errors if e['severity'] == 'MEDIUM')
-            st.metric(
-                label="🟠 Medium Severity",
-                value=medium_severity,
-                help="Potential gaps (2.5-5 units)"
-            )
+        # Metrics Dashboard
+        render_metrics_dashboard(stats, errors)
         
         st.divider()
         
-        # Map visualization
-        st.subheader("🗺️ Interactive Map")
-        st.caption("Grey lines = Road network | Red/Orange markers = Detected errors (click for details)")
+        # Create tabs for organized content
+        tab1, tab2, tab3 = st.tabs(["🗺️ Map View", "📋 Error Details", "📊 Statistics"])
         
-        map_obj = create_map(lines, errors)
-        st_folium(map_obj, width="stretch", height=500)
+        with tab1:
+            st.subheader("Interactive Network Map")
+            st.caption("Click markers for error details • Grey = roads • Red/Orange = errors")
+            
+            map_obj = create_enhanced_map(analyzer, errors, show_dead_ends, dead_ends)
+            st_folium(map_obj, height=550, use_container_width=True)
         
-        st.divider()
+        with tab2:
+            st.subheader("Detected Anomalies")
+            render_error_table(errors)
+            
+            if errors:
+                # Export button
+                df = pd.DataFrame(errors)
+                csv_data = df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Report (CSV)",
+                    data=csv_data,
+                    file_name="topology_errors_report.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
         
-        # Error details table
-        if errors:
-            st.subheader("📋 Error Details")
+        with tab3:
+            st.subheader("Network Statistics")
+            render_statistics_panel(stats)
             
-            df = pd.DataFrame(errors)
-            df = df.rename(columns={
-                'x': 'X Coordinate',
-                'y': 'Y Coordinate', 
-                'distance': 'Gap Distance',
-                'error_type': 'Error Type',
-                'severity': 'Severity'
-            })
-            
-            # Style the dataframe
-            def highlight_severity(val):
-                if val == 'HIGH':
-                    return 'background-color: #ffcccc'
-                elif val == 'MEDIUM':
-                    return 'background-color: #fff3cd'
-                return ''
-            
-            styled_df = df.style.map(
-                highlight_severity, 
-                subset=['Severity']
-            )
-            
-            st.dataframe(
-                styled_df,
-                width="stretch",
-                hide_index=True
-            )
-            
-            # Download button for errors
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Error Report (CSV)",
-                data=csv,
-                file_name="map_validation_errors.csv",
-                mime="text/csv"
-            )
-        else:
-            st.success("✅ No topology errors detected! The road network appears to be clean.")
+            # Quality Score
+            if stats.get('total_segments', 0) > 0:
+                error_rate = len(errors) / stats['total_segments'] * 100
+                quality_score = max(0, 100 - error_rate * 10)
+                
+                st.divider()
+                st.markdown("**Network Quality Score**")
+                
+                if quality_score >= 90:
+                    st.success(f"🌟 Excellent: {quality_score:.1f}%")
+                elif quality_score >= 70:
+                    st.warning(f"⚠️ Good: {quality_score:.1f}%")
+                else:
+                    st.error(f"🔴 Needs Attention: {quality_score:.1f}%")
     
     else:
-        # No data loaded - show instructions
+        # Welcome screen
         st.info("""
-        👈 **Get started by:**
-        1. Uploading a WKT file using the sidebar, OR
-        2. Clicking **"Load Demo Data"** to see the validator in action
+        **Welcome to AI Map Validator!**
         
-        The validator will analyze your road network and detect undershoots, 
-        gaps, and other topology errors automatically.
+        Get started by:
+        1. **Upload** a WKT file using the sidebar, or
+        2. Click **"Load Demo Data"** to see the validator in action
+        
+        The system will automatically detect topology errors like undershoots and gaps.
         """)
         
-        # Show example of expected format
-        with st.expander("📖 Expected WKT Format"):
+        with st.expander("📖 Supported Format"):
             st.code("""
 LINESTRING(x1 y1, x2 y2, x3 y3, ...)
 LINESTRING(x1 y1, x2 y2, ...)
-...
             """, language="text")
-            st.markdown("""
-            Each line should be a valid WKT LINESTRING geometry.
-            Coordinates can be in any projected coordinate system.
-            """)
+            st.markdown("Each line should be a valid WKT LINESTRING geometry.")
 
-
-# =============================================================================
-# APPLICATION ENTRY POINT
-# =============================================================================
 
 if __name__ == "__main__":
     main()
