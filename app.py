@@ -400,7 +400,7 @@ def main():
         st.markdown("---")
         
         # Demo data button
-        if st.button("🎯 Load Demo Data", use_container_width=True, type="primary"):
+        if st.button("🎯 Load Demo Data", type="primary"):
             st.session_state['use_demo'] = True
             st.session_state['uploaded_data'] = None
         
