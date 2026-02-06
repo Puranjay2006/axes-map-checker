@@ -1,11 +1,11 @@
 """
 Axes Systems: AI Map Validator
 ==============================
-A professional Streamlit web application for detecting topology errors in road networks.
-Uses advanced dangling node detection and spatial analysis algorithms.
+A beautifully designed Streamlit web application for detecting topology errors in road networks.
+Features stunning UI with glassmorphism, animations, and DM Sans typography.
 
 Author: Axes Systems Team
-Version: 2.0.0
+Version: 3.0.0
 """
 
 import streamlit as st
@@ -24,7 +24,7 @@ from typing import List, Dict, Tuple, Optional
 
 APP_CONFIG = {
     "title": "Axes Systems: AI Map Validator",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "icon": "🗺️",
     "default_threshold": 5.0,
     "precision": 6,
@@ -87,6 +87,643 @@ LINESTRING(7076.039187 8586.425254, 7076.445109 8585.496170)
 LINESTRING(7073.644989 8591.195792, 7074.097682 8590.508277, 7074.902551 8589.026835, 7076.039187 8586.425254)
 LINESTRING(7076.445109 8585.496170, 7078.460542 8580.883238)
 LINESTRING(7078.460542 8580.883238, 7088.449323 8586.079937, 7107.773102 8595.942917, 7107.972548 8596.047402, 7110.782362 8597.356157)"""
+
+
+# =============================================================================
+# CUSTOM CSS - STUNNING UI WITH GLASSMORPHISM & DM SANS
+# =============================================================================
+
+CUSTOM_CSS = """
+<style>
+    /* Import DM Sans Font */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+    
+    /* Root Variables */
+    :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --primary-light: #818cf8;
+        --secondary: #06b6d4;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --dark: #0f172a;
+        --gray-900: #1e293b;
+        --gray-800: #334155;
+        --gray-600: #475569;
+        --gray-400: #94a3b8;
+        --gray-200: #e2e8f0;
+        --gray-100: #f1f5f9;
+        --white: #ffffff;
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.3);
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+    
+    /* Global Styles */
+    * {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+    
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background-attachment: fixed;
+    }
+    
+    /* Main Container */
+    .main .block-container {
+        padding: 2rem 2rem 3rem 2rem;
+        max-width: 1400px;
+    }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: var(--gray-100) !important;
+    }
+    
+    [data-testid="stSidebar"] .stMarkdown h1,
+    [data-testid="stSidebar"] .stMarkdown h2,
+    [data-testid="stSidebar"] .stMarkdown h3 {
+        color: var(--white) !important;
+        font-weight: 600 !important;
+    }
+    
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255,255,255,0.15) !important;
+        margin: 1.5rem 0;
+    }
+    
+    /* Glass Card Effect */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: var(--shadow-xl);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .glass-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    }
+    
+    /* Hero Header */
+    .hero-container {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 32px;
+        padding: 3rem 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+        box-shadow: var(--shadow-xl);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .hero-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--secondary), var(--primary-light));
+        background-size: 200% 100%;
+        animation: gradient-shift 3s ease infinite;
+    }
+    
+    @keyframes gradient-shift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    
+    .hero-icon {
+        font-size: 4rem;
+        margin-bottom: 0.5rem;
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 50%, #7c3aed 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 0 0 0.5rem 0;
+        letter-spacing: -0.02em;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: var(--gray-600);
+        font-weight: 500;
+        margin: 0;
+        letter-spacing: 0.01em;
+    }
+    
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white !important;
+        border-radius: 100px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-top: 1rem;
+        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.4);
+    }
+    
+    /* Metric Cards */
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 1024px) {
+        .metric-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 640px) {
+        .metric-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .metric-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 20px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-lg);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        border-radius: 20px 20px 0 0;
+    }
+    
+    .metric-card.purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .metric-card.blue::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .metric-card.red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .metric-card.orange::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .metric-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+    
+    .metric-card:hover {
+        transform: translateY(-6px) scale(1.02);
+        box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .metric-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--gray-900);
+        line-height: 1;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .metric-delta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+    
+    .metric-delta.success {
+        background: rgba(16, 185, 129, 0.15);
+        color: #059669;
+    }
+    
+    .metric-delta.danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: #dc2626;
+    }
+    
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(12px);
+        border-radius: 16px;
+        padding: 0.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        transition: all 0.2s ease;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+        color: white !important;
+        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.4);
+    }
+    
+    .stTabs [data-baseweb="tab-panel"] {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(16px);
+        border-radius: 24px;
+        padding: 2rem;
+        margin-top: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    /* Section Headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    
+    .section-header h3 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0;
+    }
+    
+    .section-header .icon {
+        font-size: 1.75rem;
+    }
+    
+    /* Map Container */
+    .map-container {
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+        border: 3px solid rgba(255, 255, 255, 0.5);
+    }
+    
+    /* DataFrames and Tables */
+    .stDataFrame {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+    
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        border-radius: 16px;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+        letter-spacing: 0.02em;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.4);
+    }
+    
+    .stButton button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.5);
+    }
+    
+    .stButton button:active {
+        transform: translateY(0);
+    }
+    
+    .stDownloadButton button {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.4);
+    }
+    
+    .stDownloadButton button:hover {
+        box-shadow: 0 6px 20px 0 rgba(16, 185, 129, 0.5);
+    }
+    
+    /* Slider */
+    .stSlider [data-baseweb="slider"] {
+        margin-top: 1rem;
+    }
+    
+    .stSlider [data-testid="stTickBar"] > div {
+        background: var(--primary-light);
+    }
+    
+    /* File Uploader */
+    [data-testid="stFileUploader"] {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 0.5rem;
+        border: 2px dashed rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Info, Success, Warning, Error Boxes */
+    .stAlert {
+        border-radius: 16px;
+        border: none;
+        backdrop-filter: blur(8px);
+    }
+    
+    .stAlert > div {
+        border-radius: 16px;
+    }
+    
+    /* Welcome Card */
+    .welcome-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 28px;
+        padding: 3rem;
+        text-align: center;
+        box-shadow: var(--shadow-xl);
+    }
+    
+    .welcome-icon {
+        font-size: 5rem;
+        margin-bottom: 1rem;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    .welcome-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin-bottom: 1rem;
+    }
+    
+    .welcome-text {
+        font-size: 1.1rem;
+        color: var(--gray-600);
+        line-height: 1.7;
+        max-width: 600px;
+        margin: 0 auto 2rem auto;
+    }
+    
+    .step-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        max-width: 400px;
+        margin: 0 auto;
+        text-align: left;
+    }
+    
+    .step-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+        border-radius: 14px;
+        transition: all 0.2s ease;
+    }
+    
+    .step-item:hover {
+        transform: translateX(8px);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+    }
+    
+    .step-number {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+    }
+    
+    .step-text {
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--gray-800);
+    }
+    
+    /* Quality Score */
+    .quality-score {
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: center;
+        margin-top: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .score-circle {
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem auto;
+        font-weight: 800;
+        font-size: 2.5rem;
+        color: white;
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .score-circle.excellent {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .score-circle.good {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    .score-circle.poor {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+    
+    .score-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 0.5rem;
+        color: var(--gray-600);
+    }
+    
+    /* Statistics Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        border: 1px solid rgba(99, 102, 241, 0.1);
+    }
+    
+    .stat-card h4 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .stat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+    }
+    
+    .stat-item:last-child {
+        border-bottom: none;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: var(--gray-600);
+    }
+    
+    .stat-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+    
+    /* Expander Styling */
+    .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 12px;
+        font-weight: 600;
+    }
+    
+    /* Code Block */
+    .stCodeBlock {
+        border-radius: 12px;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 2rem;
+        margin-top: 2rem;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.875rem;
+    }
+    
+    .footer a {
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Smooth Scrolling */
+    html {
+        scroll-behavior: smooth;
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--primary-dark);
+    }
+</style>
+"""
 
 
 # =============================================================================
@@ -247,7 +884,7 @@ def create_enhanced_map(
     show_dead_ends: bool = False,
     dead_ends: Optional[List[Dict]] = None
 ) -> folium.Map:
-    """Create an enhanced interactive Folium map."""
+    """Create an enhanced interactive Folium map with beautiful styling."""
     
     if not analyzer.lines:
         return folium.Map(location=[0, 0], zoom_start=2, tiles='cartodbpositron')
@@ -260,74 +897,105 @@ def create_enhanced_map(
     def normalize(x: float, y: float) -> List[float]:
         return [(y - center_y) * scale, (x - center_x) * scale]
     
-    # Create base map
+    # Create base map with dark style
     m = folium.Map(
         location=[0, 0],
         zoom_start=15,
-        tiles='cartodbpositron'
+        tiles='cartodbdark_matter'
     )
     
-    # Road network layer
-    road_group = folium.FeatureGroup(name='Road Network')
+    # Add alternative tile layers
+    folium.TileLayer('cartodbpositron', name='Light Mode').add_to(m)
+    folium.TileLayer('openstreetmap', name='OpenStreetMap').add_to(m)
+    
+    # Road network layer with gradient effect
+    road_group = folium.FeatureGroup(name='🛣️ Road Network')
     for i, line in enumerate(analyzer.lines):
         coords = [normalize(c[0], c[1]) for c in line.coords]
         folium.PolyLine(
             coords,
-            color='#4a4a4a',
-            weight=2.5,
-            opacity=0.7,
-            popup=f"<b>Road Segment #{i+1}</b><br>Length: {line.length:.2f} units"
+            color='#60a5fa',
+            weight=3,
+            opacity=0.85,
+            popup=folium.Popup(
+                f"""<div style="font-family: 'DM Sans', sans-serif; min-width: 160px;">
+                <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-weight: 700;">🛣️ Road #{i+1}</h4>
+                <p style="margin: 4px 0; color: #64748b;"><b>Length:</b> {line.length:.2f} units</p>
+                </div>""",
+                max_width=200
+            )
         ).add_to(road_group)
     road_group.add_to(m)
     
-    # Error markers layer
+    # Error markers layer with pulsing effect
     if errors:
-        error_group = folium.FeatureGroup(name='Detected Errors')
+        error_group = folium.FeatureGroup(name='⚠️ Detected Errors')
         for i, error in enumerate(errors):
             loc = normalize(error['x'], error['y'])
-            color = '#dc3545' if error['severity'] == 'HIGH' else '#fd7e14'
+            is_high = error['severity'] == 'HIGH'
+            color = '#ef4444' if is_high else '#f59e0b'
+            icon_symbol = '🔴' if is_high else '🟠'
             
+            # Outer glow effect
             folium.CircleMarker(
                 location=loc,
-                radius=10,
+                radius=18,
                 color=color,
                 fill=True,
                 fillColor=color,
-                fillOpacity=0.85,
+                fillOpacity=0.2,
+                weight=0
+            ).add_to(error_group)
+            
+            # Main marker
+            folium.CircleMarker(
+                location=loc,
+                radius=10,
+                color='white',
+                weight=2,
+                fill=True,
+                fillColor=color,
+                fillOpacity=0.95,
                 popup=folium.Popup(
-                    f"""<div style="font-family: Arial; min-width: 180px;">
-                    <h4 style="color: {color}; margin: 0 0 8px 0;">⚠️ {error['error_type']}</h4>
-                    <table style="width: 100%;">
-                        <tr><td><b>Gap:</b></td><td>{error['distance']:.4f} units</td></tr>
-                        <tr><td><b>Severity:</b></td><td>{error['severity']}</td></tr>
-                        <tr><td><b>X:</b></td><td>{error['x']:.2f}</td></tr>
-                        <tr><td><b>Y:</b></td><td>{error['y']:.2f}</td></tr>
-                    </table>
+                    f"""<div style="font-family: 'DM Sans', sans-serif; min-width: 200px; padding: 4px;">
+                    <h4 style="color: {color}; margin: 0 0 12px 0; font-weight: 700; font-size: 1.1rem;">
+                        {icon_symbol} {error['error_type']}
+                    </h4>
+                    <div style="background: #f8fafc; border-radius: 8px; padding: 10px;">
+                        <p style="margin: 6px 0; color: #334155;"><b>Gap Distance:</b> {error['distance']:.4f}</p>
+                        <p style="margin: 6px 0; color: #334155;"><b>Severity:</b> 
+                            <span style="background: {color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">
+                                {error['severity']}
+                            </span>
+                        </p>
+                        <p style="margin: 6px 0; color: #334155;"><b>Location:</b> ({error['x']:.2f}, {error['y']:.2f})</p>
+                    </div>
                     </div>""",
-                    max_width=220
+                    max_width=250
                 ),
-                tooltip=f"Error #{i+1}: {error['error_type']}"
+                tooltip=f"⚠️ Error #{i+1}: {error['error_type']} ({error['severity']})"
             ).add_to(error_group)
         error_group.add_to(m)
     
     # Dead ends layer (optional)
     if show_dead_ends and dead_ends:
-        dead_end_group = folium.FeatureGroup(name='Dead Ends', show=False)
+        dead_end_group = folium.FeatureGroup(name='🔵 Dead Ends', show=False)
         for de in dead_ends:
             loc = normalize(de['x'], de['y'])
             folium.CircleMarker(
                 location=loc,
-                radius=6,
-                color='#6c757d',
+                radius=7,
+                color='#6366f1',
+                weight=2,
                 fill=True,
-                fillColor='#6c757d',
-                fillOpacity=0.6,
+                fillColor='#818cf8',
+                fillOpacity=0.7,
                 tooltip=f"Dead End (nearest: {de['nearest_distance']:.1f})"
             ).add_to(dead_end_group)
         dead_end_group.add_to(m)
     
     # Add layer control
-    folium.LayerControl().add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
     
     # Fit bounds
     all_coords = [normalize(c[0], c[1]) for line in analyzer.lines for c in line.coords]
@@ -340,67 +1008,154 @@ def create_enhanced_map(
 # STREAMLIT UI COMPONENTS
 # =============================================================================
 
+def render_hero_header():
+    """Render the beautiful hero header."""
+    st.markdown("""
+        <div class="hero-container">
+            <div class="hero-icon">🗺️</div>
+            <h1 class="hero-title">AI Map Validator</h1>
+            <p class="hero-subtitle">Automated topology validation for road networks powered by spatial AI</p>
+            <div class="hero-badge">
+                <span>✨</span>
+                <span>Version 3.0 • IIT Mandi Hackathon</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+
 def render_metrics_dashboard(stats: Dict, errors: List[Dict]) -> None:
-    """Render the metrics dashboard."""
+    """Render the beautiful metrics dashboard."""
     
-    col1, col2, col3, col4 = st.columns(4)
+    total_segments = stats.get('total_segments', 0)
+    error_count = len(errors)
+    high_count = sum(1 for e in errors if e['severity'] == 'HIGH')
+    medium_count = sum(1 for e in errors if e['severity'] == 'MEDIUM')
     
-    with col1:
-        st.metric(
-            label="Total Segments",
-            value=stats.get('total_segments', 0),
-            help="Number of road segments in the network"
-        )
+    clean_status = "Clean!" if error_count == 0 else f"{error_count} issues"
+    clean_class = "success" if error_count == 0 else "danger"
     
-    with col2:
-        error_count = len(errors)
-        st.metric(
-            label="Anomalies Found",
-            value=error_count,
-            delta="Clean!" if error_count == 0 else f"{error_count} issues",
-            delta_color="normal" if error_count == 0 else "inverse"
-        )
-    
-    with col3:
-        high_count = sum(1 for e in errors if e['severity'] == 'HIGH')
-        st.metric(
-            label="High Severity",
-            value=high_count,
-            help="Critical undershoots requiring attention"
-        )
-    
-    with col4:
-        medium_count = sum(1 for e in errors if e['severity'] == 'MEDIUM')
-        st.metric(
-            label="Medium Severity",
-            value=medium_count,
-            help="Potential gaps for review"
-        )
+    st.markdown(f"""
+        <div class="metric-grid">
+            <div class="metric-card purple">
+                <div class="metric-icon">🛣️</div>
+                <div class="metric-value">{total_segments}</div>
+                <div class="metric-label">Road Segments</div>
+            </div>
+            <div class="metric-card blue">
+                <div class="metric-icon">🔍</div>
+                <div class="metric-value">{error_count}</div>
+                <div class="metric-label">Anomalies Found</div>
+                <div class="metric-delta {clean_class}">{clean_status}</div>
+            </div>
+            <div class="metric-card red">
+                <div class="metric-icon">🚨</div>
+                <div class="metric-value">{high_count}</div>
+                <div class="metric-label">High Severity</div>
+            </div>
+            <div class="metric-card orange">
+                <div class="metric-icon">⚡</div>
+                <div class="metric-value">{medium_count}</div>
+                <div class="metric-label">Medium Severity</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
 
-def render_statistics_panel(stats: Dict) -> None:
-    """Render detailed statistics panel."""
+def render_statistics_panel(stats: Dict, errors: List[Dict]) -> None:
+    """Render detailed statistics panel with quality score."""
     
-    col1, col2 = st.columns(2)
+    st.markdown("""
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>📏 Network Metrics</h4>
+                <div class="stat-item">
+                    <span class="stat-label">Total Length</span>
+                    <span class="stat-value">{:,.2f} units</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Average Segment</span>
+                    <span class="stat-value">{:.2f} units</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Shortest Segment</span>
+                    <span class="stat-value">{:.2f} units</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Longest Segment</span>
+                    <span class="stat-value">{:.2f} units</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h4>🔗 Topology Metrics</h4>
+                <div class="stat-item">
+                    <span class="stat-label">Total Nodes</span>
+                    <span class="stat-value">{}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Connected Nodes</span>
+                    <span class="stat-value">{}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Dangling Nodes</span>
+                    <span class="stat-value">{}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Segments</span>
+                    <span class="stat-value">{}</span>
+                </div>
+            </div>
+        </div>
+    """.format(
+        stats.get('total_length', 0),
+        stats.get('avg_length', 0),
+        stats.get('min_length', 0),
+        stats.get('max_length', 0),
+        stats.get('total_endpoints', 0),
+        stats.get('connected_nodes', 0),
+        stats.get('dangling_nodes', 0),
+        stats.get('total_segments', 0)
+    ), unsafe_allow_html=True)
     
-    with col1:
-        st.markdown("**Network Metrics**")
-        st.write(f"- Total Length: **{stats.get('total_length', 0):,.2f}** units")
-        st.write(f"- Avg Segment: **{stats.get('avg_length', 0):.2f}** units")
-        st.write(f"- Min/Max: **{stats.get('min_length', 0):.2f}** / **{stats.get('max_length', 0):.2f}** units")
-    
-    with col2:
-        st.markdown("**Topology Metrics**")
-        st.write(f"- Total Nodes: **{stats.get('total_endpoints', 0)}**")
-        st.write(f"- Connected: **{stats.get('connected_nodes', 0)}**")
-        st.write(f"- Dangling: **{stats.get('dangling_nodes', 0)}**")
+    # Quality Score
+    if stats.get('total_segments', 0) > 0:
+        error_rate = len(errors) / stats['total_segments'] * 100
+        quality_score = max(0, 100 - error_rate * 10)
+        
+        if quality_score >= 90:
+            score_class = "excellent"
+            score_label = "Excellent"
+            score_emoji = "🌟"
+        elif quality_score >= 70:
+            score_class = "good"
+            score_label = "Good"
+            score_emoji = "👍"
+        else:
+            score_class = "poor"
+            score_label = "Needs Work"
+            score_emoji = "🔧"
+        
+        st.markdown(f"""
+            <div class="quality-score">
+                <h3 style="margin: 0 0 1rem 0; color: #1e293b; font-weight: 700;">Network Quality Score</h3>
+                <div class="score-circle {score_class}">
+                    <span>{quality_score:.0f}%</span>
+                </div>
+                <div class="score-label">{score_emoji} {score_label}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
 
 def render_error_table(errors: List[Dict]) -> None:
     """Render the error details table."""
     
     if not errors:
-        st.success("✅ No topology errors detected! The network is clean.")
+        st.markdown("""
+            <div style="text-align: center; padding: 3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%); border-radius: 16px;">
+                <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+                <h3 style="color: #059669; margin: 0 0 0.5rem 0; font-weight: 700;">All Clear!</h3>
+                <p style="color: #64748b; margin: 0;">No topology errors detected. Your network is clean.</p>
+            </div>
+        """, unsafe_allow_html=True)
         return
     
     df = pd.DataFrame(errors)
@@ -412,9 +1167,9 @@ def render_error_table(errors: List[Dict]) -> None:
     # Apply styling
     def style_severity(val):
         if val == 'HIGH':
-            return 'background-color: #f8d7da; color: #721c24;'
+            return 'background: linear-gradient(135deg, #fef2f2, #fee2e2); color: #991b1b; font-weight: 600;'
         elif val == 'MEDIUM':
-            return 'background-color: #fff3cd; color: #856404;'
+            return 'background: linear-gradient(135deg, #fffbeb, #fef3c7); color: #92400e; font-weight: 600;'
         return ''
     
     styled = df.style.map(style_severity, subset=['Severity'])
@@ -424,20 +1179,60 @@ def render_error_table(errors: List[Dict]) -> None:
         'Y Coordinate': '{:.2f}'
     })
     
-    st.dataframe(styled, use_container_width=True)
+    st.dataframe(styled, use_container_width=True, height=400)
+
+
+def render_welcome_screen():
+    """Render the beautiful welcome screen."""
+    st.markdown("""
+        <div class="welcome-card">
+            <div class="welcome-icon">🗺️</div>
+            <h2 class="welcome-title">Welcome to AI Map Validator</h2>
+            <p class="welcome-text">
+                Harness the power of spatial AI to automatically detect topology errors 
+                in your road networks. Simply upload your data or try our demo to get started.
+            </p>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <span class="step-text">Upload a WKT file or load demo data</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <span class="step-text">Adjust detection threshold as needed</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <span class="step-text">Explore the interactive map & results</span>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    with st.expander("📖 Supported Format", expanded=False):
+        st.code("""
+LINESTRING(x1 y1, x2 y2, x3 y3, ...)
+LINESTRING(x1 y1, x2 y2, ...)
+        """, language="text")
+        st.markdown("Each line should be a valid WKT LINESTRING geometry.")
 
 
 def render_sidebar() -> Tuple[Optional[str], float, bool]:
     """Render sidebar and return user inputs."""
     
     with st.sidebar:
-        st.title("🗺️ AI Map Validator")
-        st.caption(f"v{APP_CONFIG['version']}")
+        st.markdown("""
+            <div style="text-align: center; padding: 1rem 0;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🗺️</div>
+                <h2 style="margin: 0; font-weight: 800; font-size: 1.5rem;">AI Map Validator</h2>
+                <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem; opacity: 0.7;">v3.0.0 • Axes Systems</p>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.divider()
         
         # Data Input Section
-        st.subheader("📁 Data Input")
+        st.markdown("### 📁 Data Input")
         
         uploaded_file = st.file_uploader(
             "Upload WKT/TXT file",
@@ -454,7 +1249,7 @@ def render_sidebar() -> Tuple[Optional[str], float, bool]:
         st.divider()
         
         # Parameters Section
-        st.subheader("⚙️ Parameters")
+        st.markdown("### ⚙️ Parameters")
         
         threshold = st.slider(
             "Detection Threshold",
@@ -473,20 +1268,26 @@ def render_sidebar() -> Tuple[Optional[str], float, bool]:
         
         st.divider()
         
-        # Info Section
-        st.subheader("ℹ️ How It Works")
+        # How It Works Section
+        st.markdown("### 💡 How It Works")
         st.markdown("""
-        1. **Parse** geometry data
-        2. **Index** all endpoints  
-        3. **Identify** dangling nodes
-        4. **Measure** gaps to nearest roads
-        5. **Classify** errors by severity
-        """)
+        <div style="font-size: 0.85rem; line-height: 1.6;">
+            <p><b>1.</b> Parse geometry data</p>
+            <p><b>2.</b> Index all endpoints</p>
+            <p><b>3.</b> Identify dangling nodes</p>
+            <p><b>4.</b> Measure gaps to nearest roads</p>
+            <p><b>5.</b> Classify errors by severity</p>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.divider()
         
-        st.caption("Built for IIT Mandi Hackathon 3.0")
-        st.caption("© 2026 Axes Systems")
+        st.markdown("""
+            <div style="text-align: center; font-size: 0.75rem; opacity: 0.6;">
+                Built for IIT Mandi Hackathon 3.0<br>
+                © 2026 Axes Systems
+            </div>
+        """, unsafe_allow_html=True)
     
     # Determine data source
     wkt_data = None
@@ -517,36 +1318,8 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Custom CSS
-    st.markdown("""
-    <style>
-        .main-header {
-            font-size: 2.2rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            text-align: center;
-            margin-bottom: 0.5rem;
-        }
-        .sub-header {
-            text-align: center;
-            color: #6c757d;
-            margin-bottom: 1.5rem;
-        }
-        .stMetric {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 1rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        div[data-testid="stMetricValue"] {
-            font-size: 1.8rem;
-            font-weight: 700;
-        }
-        .block-container {
-            padding-top: 2rem;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+    # Inject Custom CSS
+    st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
     
     # Initialize session state
     if 'data_source' not in st.session_state:
@@ -555,16 +1328,15 @@ def main():
     # Render sidebar and get inputs
     wkt_data, threshold, show_dead_ends = render_sidebar()
     
-    # Header
-    st.markdown('<h1 class="main-header">🗺️ AI Map Validator</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Automated topology validation for road networks</p>', unsafe_allow_html=True)
+    # Render Hero Header
+    render_hero_header()
     
     if wkt_data:
         # Initialize analyzer
         analyzer = GeometryAnalyzer(precision=APP_CONFIG['precision'])
         
         # Parse and analyze
-        with st.spinner("Analyzing road network..."):
+        with st.spinner("🔍 Analyzing road network..."):
             analyzer.parse_wkt(wkt_data)
             errors = analyzer.detect_undershoots(threshold)
             stats = analyzer.get_statistics()
@@ -573,28 +1345,42 @@ def main():
         # Metrics Dashboard
         render_metrics_dashboard(stats, errors)
         
-        st.divider()
-        
         # Create tabs for organized content
         tab1, tab2, tab3 = st.tabs(["🗺️ Map View", "📋 Error Details", "📊 Statistics"])
         
         with tab1:
-            st.subheader("Interactive Network Map")
-            st.caption("Click markers for error details • Grey = roads • Red/Orange = errors")
+            st.markdown("""
+                <div class="section-header">
+                    <span class="icon">🗺️</span>
+                    <h3>Interactive Network Map</h3>
+                </div>
+                <p style="color: #64748b; margin-bottom: 1rem;">
+                    Click on markers for error details • Toggle layers using the control panel
+                </p>
+            """, unsafe_allow_html=True)
             
+            st.markdown('<div class="map-container">', unsafe_allow_html=True)
             map_obj = create_enhanced_map(analyzer, errors, show_dead_ends, dead_ends)
             st_folium(map_obj, height=550, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         with tab2:
-            st.subheader("Detected Anomalies")
+            st.markdown("""
+                <div class="section-header">
+                    <span class="icon">📋</span>
+                    <h3>Detected Anomalies</h3>
+                </div>
+            """, unsafe_allow_html=True)
+            
             render_error_table(errors)
             
             if errors:
+                st.markdown("<br>", unsafe_allow_html=True)
                 # Export button
                 df = pd.DataFrame(errors)
                 csv_data = df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Download Report (CSV)",
+                    label="📥 Download Error Report (CSV)",
                     data=csv_data,
                     file_name="topology_errors_report.csv",
                     mime="text/csv",
@@ -602,42 +1388,18 @@ def main():
                 )
         
         with tab3:
-            st.subheader("Network Statistics")
-            render_statistics_panel(stats)
+            st.markdown("""
+                <div class="section-header">
+                    <span class="icon">📊</span>
+                    <h3>Network Statistics</h3>
+                </div>
+            """, unsafe_allow_html=True)
             
-            # Quality Score
-            if stats.get('total_segments', 0) > 0:
-                error_rate = len(errors) / stats['total_segments'] * 100
-                quality_score = max(0, 100 - error_rate * 10)
-                
-                st.divider()
-                st.markdown("**Network Quality Score**")
-                
-                if quality_score >= 90:
-                    st.success(f"🌟 Excellent: {quality_score:.1f}%")
-                elif quality_score >= 70:
-                    st.warning(f"⚠️ Good: {quality_score:.1f}%")
-                else:
-                    st.error(f"🔴 Needs Attention: {quality_score:.1f}%")
+            render_statistics_panel(stats, errors)
     
     else:
         # Welcome screen
-        st.info("""
-        **Welcome to AI Map Validator!**
-        
-        Get started by:
-        1. **Upload** a WKT file using the sidebar, or
-        2. Click **"Load Demo Data"** to see the validator in action
-        
-        The system will automatically detect topology errors like undershoots and gaps.
-        """)
-        
-        with st.expander("📖 Supported Format"):
-            st.code("""
-LINESTRING(x1 y1, x2 y2, x3 y3, ...)
-LINESTRING(x1 y1, x2 y2, ...)
-            """, language="text")
-            st.markdown("Each line should be a valid WKT LINESTRING geometry.")
+        render_welcome_screen()
 
 
 if __name__ == "__main__":
