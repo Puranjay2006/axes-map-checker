@@ -1691,6 +1691,18 @@ def render_sidebar() -> Tuple[Optional[str], float]:
         contamination = st.slider("Anomaly Sensitivity", 0.05, 0.30, 0.15, 0.01,
             help="Higher = flag more segments as anomalous")
 
+        st.markdown("""
+        <div style="font-size:0.82rem;line-height:1.55;background:rgba(99,102,241,0.08);border-radius:10px;padding:0.7rem 0.85rem;margin-top:0.4rem;border-left:3px solid #6366f1;">
+            <b style="color:#a5b4fc;">What this means</b><br>
+            <span style="opacity:0.85;">Controls how aggressively the Isolation Forest ML model flags segments as anomalous.</span>
+            <ul style="margin:0.4rem 0 0;padding-left:1.1rem;opacity:0.85;">
+                <li><b>Low (0.05)</b> — only the most obvious outliers are flagged</li>
+                <li><b>Default (0.15)</b> — balanced precision &amp; recall</li>
+                <li><b>High (0.30)</b> — catches more gaps but may include false positives</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
         st.divider()
         st.markdown("### 🔗 Error Type Focus")
         st.markdown("""
