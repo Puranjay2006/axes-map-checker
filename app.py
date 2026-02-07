@@ -1106,13 +1106,21 @@ def render_examples():
         st.markdown(f"""
             <div class="example-card {ex['card_class']}">
                 <h4 style="color:{ex['title_color']};margin:0 0 0.5rem;">{ex['icon']} {ex['title']}</h4>
-                <p style="color:#64748b;font-size:0.85rem;margin:0;">{ex['desc']}</p>
+                <p style="color:#475569;font-size:0.85rem;margin:0;">{ex['desc']}</p>
             </div>
         """, unsafe_allow_html=True)
-        with st.expander("View WKT & Run Analysis"):
-            st.code(ex['wkt'], language="text")
-            if st.button(f"▶ Run on {ex['title'].split(':')[0] if ':' in ex['title'] else ex['title']}", key=f"run_{ex['key']}"):
-                st.session_state[f'example_result_{ex["key"]}'] = ex['key']
+
+        # Show WKT in a styled container instead of st.expander
+        with st.container():
+            show_key = f"show_wkt_{ex['key']}"
+            if st.button(f"📄 View WKT & Run Analysis — {ex['title'].split(':')[0] if ':' in ex['title'] else 'Example'}", key=f"toggle_{ex['key']}", use_container_width=True):
+                st.session_state[show_key] = not st.session_state.get(show_key, False)
+
+            if st.session_state.get(show_key, False):
+                st.code(ex['wkt'], language="text")
+                ex_key = ex['key']
+                if st.button(f"▶ Run on {ex['title'].split(':')[0] if ':' in ex['title'] else ex['title']}", key=f"run_{ex_key}"):
+                    st.session_state[f'example_result_{ex_key}'] = ex_key
 
             # Show persisted results from session state
             if st.session_state.get(f'example_result_{ex["key"]}') == ex['key']:
