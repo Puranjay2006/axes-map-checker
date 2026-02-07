@@ -394,14 +394,11 @@ CUSTOM_CSS = """
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] { background: transparent !important; }
 
-    /* Hide Material Icon text in expander toggle buttons */
-    [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"],
-    [data-testid="stExpander"] details summary span:first-child { font-size: 0 !important; overflow: hidden !important; width: 20px !important; height: 20px !important; display: inline-block !important; }
-    [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
-
-    /* Hide ALL stIcon material icon text leaks globally */
-    .stIcon, [data-testid="stIconMaterial"] { font-size: 0 !important; overflow: hidden !important; }
-    .stIcon svg, [data-testid="stIconMaterial"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
+    /* Hide Material Icon text leaks — only target icon containers, not label text */
+    [data-testid="stExpanderToggleIcon"] { font-size: 0 !important; overflow: hidden !important; width: 24px !important; height: 24px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+    [data-testid="stExpanderToggleIcon"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
+    [data-testid="stIconMaterial"] { font-size: 0 !important; overflow: hidden !important; display: inline-flex !important; width: 24px !important; height: 24px !important; align-items: center !important; }
+    [data-testid="stIconMaterial"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
 
     /* Force ALL text in main content area to be dark — override any inherited light colors */
     .main * { color: var(--gray-800) !important; }
