@@ -1552,6 +1552,14 @@ def render_onboarding():
             else:
                 dots_html += '<div style="width:12px;height:12px;border-radius:50%;background:#e2e8f0;"></div>'
 
+        tip_html = ""
+        if s.get('tip'):
+            tip_html = (
+                '<div style="background:#f0fdf4;border-radius:10px;padding:0.6rem 0.9rem;border-left:3px solid #10b981;">'
+                f'<p style="color:#166534;font-size:0.82rem;margin:0;line-height:1.5;">{s["tip"]}</p>'
+                '</div>'
+            )
+
         st.markdown(f"""
             <div class="onboarding-overlay">
                 <div class="onboarding-step-badge">Step {step + 1} of {total}</div>
@@ -1560,7 +1568,7 @@ def render_onboarding():
                     <h3 style="margin:0;font-size:1.15rem;font-weight:700;color:#1e293b;">{s['title']}</h3>
                 </div>
                 <p style="color:#475569;font-size:0.9rem;line-height:1.6;margin:0 0 0.75rem;">{s['desc']}</p>
-                {'<div style="background:#f0fdf4;border-radius:10px;padding:0.6rem 0.9rem;border-left:3px solid #10b981;"><p style="color:#166534;font-size:0.82rem;margin:0;line-height:1.5;">' + s['tip'] + '</p></div>' if s.get('tip') else ''}
+                {tip_html}
                 <div style="margin-top:1rem;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
                     <div style="width:{pct}%;height:100%;background:linear-gradient(90deg,{s['color']},{s['color']}cc);border-radius:3px;transition:width 0.3s;"></div>
                 </div>
