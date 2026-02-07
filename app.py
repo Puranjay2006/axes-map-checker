@@ -247,6 +247,7 @@ CUSTOM_CSS = """
         color: white; border: none; border-radius: 12px; padding: 0.7rem 1.4rem;
         font-weight: 600; font-size: 0.9rem; transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
         box-shadow: 0 4px 14px 0 rgba(99,102,241,0.4);
+        white-space: nowrap;
     }
     .stButton button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px 0 rgba(99,102,241,0.5); }
     .stDownloadButton button {
