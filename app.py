@@ -378,24 +378,37 @@ CUSTOM_CSS = """
 
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
 
-    /* Hide the sidebar collapse button icon text ("keyboard_double_arrow_left") */
-    [data-testid="stSidebarCollapseButton"] button span,
-    [data-testid="collapsedControl"] button span { font-size: 0 !important; }
+    /* Hide sidebar collapse button icon text leak ("keyboard_double_arrow_left") */
+    [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="collapsedControl"] button { font-size: 0 !important; line-height: 0 !important; overflow: hidden !important; }
     [data-testid="stSidebarCollapseButton"] button svg,
-    [data-testid="collapsedControl"] button svg { width: 24px; height: 24px; }
+    [data-testid="collapsedControl"] button svg { width: 24px !important; height: 24px !important; font-size: 24px !important; }
+    [data-testid="stSidebarCollapseButton"] button span,
+    [data-testid="collapsedControl"] button span { font-size: 0 !important; display: none !important; }
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] { background: transparent !important; }
 
-    /* Ensure readable text on ALL light backgrounds in main content */
+    /* Force ALL text in main content area to be dark — override any inherited light colors */
+    .main * { color: var(--gray-800); }
     .main [data-testid="stExpander"] summary,
-    .main [data-testid="stExpander"] summary span { color: var(--gray-800) !important; }
-    .main [data-testid="stExpander"] [data-testid="stExpanderDetails"] { color: var(--gray-800) !important; }
-    .main .stMarkdown p, .main .stMarkdown li { color: var(--gray-700); }
+    .main [data-testid="stExpander"] summary *,
+    .main [data-testid="stExpander"] details * { color: var(--gray-800) !important; }
+    .main .stMarkdown p, .main .stMarkdown li, .main .stMarkdown td,
+    .main .stMarkdown code { color: var(--gray-700) !important; }
     .main .stMarkdown h1, .main .stMarkdown h2, .main .stMarkdown h3,
     .main .stMarkdown h4 { color: var(--gray-900) !important; }
     .main label, .main .stSlider label,
     .main [data-baseweb="select"] { color: var(--gray-800) !important; }
     .main [data-testid="stWidgetLabel"] label p { color: var(--gray-800) !important; }
+    /* Keep elements that SHOULD be white on dark/colored backgrounds */
+    .hero-badge, .hero-badge * { color: white !important; }
+    .step-number { color: white !important; }
+    .score-circle, .score-circle * { color: white !important; }
+    .pipe-icon, .pipe-icon * { color: white !important; }
+    .onboarding-step-badge, .onboarding-step-badge * { color: white !important; }
+    .stTabs [aria-selected="true"] { color: white !important; }
+    .stButton button { color: white !important; }
+    .stDownloadButton button { color: white !important; }
 
     html { scroll-behavior: smooth; }
     ::-webkit-scrollbar { width:8px; height:8px; }
