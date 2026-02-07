@@ -1,12 +1,16 @@
 """
-FutureFormers: AI-Powered Route Integrity QA System
-=====================================================
-Production-style Quality Assurance system for ride-hailing routing infrastructure.
-Detects route continuity & connectivity errors using Feature Extraction,
-Rule-Based Validation (Option B), Isolation Forest ML, and combined Decision Logic.
+FutureFormers: Route Continuity Gap Detector
+=============================================
+AI-powered QA tool that detects ONE specific error type in road network data:
+**Endpoint Gaps** — where road segments should connect but have small coordinate
+gaps between their endpoints, breaking route continuity.
+
+Uses Feature Extraction + Rule-Based Gap Detection + Isolation Forest ML
+to find, visualize, and auto-fix broken connections.
 
 Team: FutureFormers | IIT Mandi Hackathon 3.0 | Problem Statement 2
-Version: 5.0.0
+Company: Axes Systems GmbH | Option B: Rule-Based Geometry Validation
+Version: 6.0.0
 """
 
 import streamlit as st
@@ -15,10 +19,7 @@ import numpy as np
 import folium
 import json
 import io
-import math
-import base64
 from datetime import datetime
-from itertools import combinations
 from streamlit_folium import st_folium
 from shapely import wkt
 from shapely.geometry import Point, LineString
@@ -33,15 +34,17 @@ from sklearn.preprocessing import StandardScaler
 # =============================================================================
 
 APP_CONFIG = {
-    "title": "Route Integrity QA System",
-    "version": "5.0.0",
-    "icon": "🛣️",
+    "title": "Route Continuity Gap Detector",
+    "version": "6.0.0",
+    "icon": "🔍",
     "precision": 6,
     "team": "FutureFormers",
+    "error_type": "ENDPOINT_GAP",
+    "error_label": "Route Continuity Gap",
 }
 
 # =============================================================================
-# DEMO DATA — Problem 2 streets_xgen.wkt
+# DEMO DATA — Problem 2 streets_xgen.wkt (56 LINESTRINGs)
 # =============================================================================
 DEMO_WKT_DATA = """LINESTRING(7071.421606 8585.627528, 7074.672945 8588.813669, 7074.902551 8589.026835, 7075.084535 8589.196346, 7079.265638 8592.884220, 7081.745726 8594.906230, 7087.160750 8598.968277, 7091.114457 8601.621165, 7097.122261 8605.189984, 7104.911244 8609.486740, 7105.304126 8609.703307, 7105.767874 8609.959559, 7144.536643 8631.196101, 7154.035087 8636.400567, 7154.349676 8636.571269, 7154.424397 8636.611861, 7163.899654 8641.749543, 7194.100989 8658.211975, 7204.788850 8664.037795, 7217.453480 8671.075087, 7225.937575 8676.277228, 7229.984882 8679.124346, 7234.367017 8682.488447, 7238.456504 8685.821480, 7243.451150 8690.254299, 7247.565354 8694.303307, 7251.962457 8699.059843, 7255.123087 8702.735811, 7259.170961 8707.866520, 7262.826576 8713.000630, 7262.874709 8713.070759, 7263.406488 8713.854425, 7268.192504 8721.195591, 7269.545140 8723.350488)
 LINESTRING(7228.943036 8691.704220, 7230.263868 8692.301820)
@@ -98,6 +101,37 @@ LINESTRING(7073.644989 8591.195792, 7074.097682 8590.508277, 7074.902551 8589.02
 LINESTRING(7076.445109 8585.496170, 7078.460542 8580.883238)
 LINESTRING(7078.460542 8580.883238, 7088.449323 8586.079937, 7107.773102 8595.942917, 7107.972548 8596.047402, 7110.782362 8597.356157)"""
 
+# =============================================================================
+# ERROR EXAMPLES — for training & demonstration
+# =============================================================================
+
+EXAMPLE_CORRECT = """LINESTRING(100 200, 120 210, 140 220, 160 230)
+LINESTRING(160 230, 180 240, 200 250, 220 260)
+LINESTRING(220 260, 240 270, 260 280, 280 290)
+LINESTRING(160 230, 170 215, 180 200, 190 185)
+LINESTRING(220 260, 230 275, 240 290, 250 305)"""
+
+EXAMPLE_ERROR_1 = """LINESTRING(100 200, 120 210, 140 220, 160 230)
+LINESTRING(160.5 230.3, 180 240, 200 250, 220 260)
+LINESTRING(220 260, 240 270, 260 280, 280 290)
+LINESTRING(160 230, 170 215, 180 200, 190 185)
+LINESTRING(220.8 260.5, 230 275, 240 290, 250 305)"""
+
+EXAMPLE_ERROR_2 = """LINESTRING(500 600, 520 610, 540 620, 560 630)
+LINESTRING(560 630, 580 640, 600 650, 620 660)
+LINESTRING(620.2 660.1, 640 670, 660 680, 680 690)
+LINESTRING(560.4 630.2, 570 615, 580 600, 590 585)
+LINESTRING(680 690, 700 700, 720 710)
+LINESTRING(720.3 710.2, 740 720, 760 730)"""
+
+EXAMPLE_ERROR_3 = """LINESTRING(300 400, 320 410, 340 420, 360 430)
+LINESTRING(360.1 430.05, 380 440, 400 450, 420 460)
+LINESTRING(420 460, 440 470, 460 480)
+LINESTRING(460 480, 480 490, 500 500)
+LINESTRING(500.6 500.4, 520 510, 540 520)
+LINESTRING(360 430, 365 415, 370 400)
+LINESTRING(370.3 400.15, 375 385, 380 370)"""
+
 
 # =============================================================================
 # CUSTOM CSS — GLASSMORPHISM + DM SANS
@@ -127,7 +161,6 @@ CUSTOM_CSS = """
 
     .main .block-container { padding: 2rem 2rem 3rem 2rem; max-width: 1400px; }
 
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(30,41,59,0.97) 100%);
         backdrop-filter: blur(20px); border-right: 1px solid rgba(255,255,255,0.1);
@@ -138,7 +171,6 @@ CUSTOM_CSS = """
     [data-testid="stSidebar"] .stMarkdown h3 { color: var(--white) !important; font-weight: 600 !important; }
     [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.15) !important; margin: 1.5rem 0; }
 
-    /* Hero */
     .hero-container {
         background: rgba(255,255,255,0.92); backdrop-filter: blur(24px);
         border: 1px solid rgba(255,255,255,0.5); border-radius: 32px;
@@ -167,10 +199,8 @@ CUSTOM_CSS = """
         margin-top: 0.8rem; box-shadow: 0 4px 14px 0 rgba(99,102,241,0.4);
     }
 
-    /* Metric Grid */
-    .metric-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    @media(max-width:1024px){ .metric-grid{grid-template-columns:repeat(3,1fr)} }
-    @media(max-width:640px){ .metric-grid{grid-template-columns:repeat(2,1fr)} }
+    .metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    @media(max-width:1024px){ .metric-grid{grid-template-columns:repeat(2,1fr)} }
     .metric-card {
         background: rgba(255,255,255,0.92); backdrop-filter: blur(16px);
         border: 1px solid rgba(255,255,255,0.5); border-radius: 20px;
@@ -181,14 +211,12 @@ CUSTOM_CSS = """
     .metric-card.purple::before { background: linear-gradient(90deg,#8b5cf6,#a78bfa); }
     .metric-card.blue::before { background: linear-gradient(90deg,#3b82f6,#60a5fa); }
     .metric-card.red::before { background: linear-gradient(90deg,#ef4444,#f87171); }
-    .metric-card.orange::before { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
     .metric-card.green::before { background: linear-gradient(90deg,#10b981,#34d399); }
     .metric-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 20px 40px -12px rgba(0,0,0,0.2); }
     .metric-icon { font-size: 1.75rem; margin-bottom: 0.3rem; }
     .metric-value { font-size: 2.2rem; font-weight: 800; color: var(--gray-900); line-height: 1; margin-bottom: 0.15rem; }
     .metric-label { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0.4rem; background: rgba(255,255,255,0.6); backdrop-filter: blur(12px);
         border-radius: 16px; padding: 0.4rem; border: 1px solid rgba(255,255,255,0.3);
@@ -208,18 +236,13 @@ CUSTOM_CSS = """
         border: 1px solid rgba(255,255,255,0.4); box-shadow: var(--shadow-lg);
     }
 
-    /* Section Header */
     .section-header { display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; }
     .section-header h3 { font-size:1.4rem; font-weight:700; color:var(--gray-900); margin:0; }
     .section-header .icon { font-size:1.5rem; }
 
-    /* Map Container */
     .map-container { border-radius:20px; overflow:hidden; box-shadow:var(--shadow-lg); border:3px solid rgba(255,255,255,0.5); }
-
-    /* Tables */
     .stDataFrame { border-radius:16px; overflow:hidden; box-shadow:0 4px 6px -1px rgb(0 0 0/0.1); }
 
-    /* Buttons */
     .stButton button {
         background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         color: white; border: none; border-radius: 12px; padding: 0.7rem 1.4rem;
@@ -232,17 +255,14 @@ CUSTOM_CSS = """
         box-shadow: 0 4px 14px 0 rgba(16,185,129,0.4);
     }
 
-    /* File Uploader */
     [data-testid="stFileUploader"] {
         background: rgba(255,255,255,0.1); border-radius: 12px; padding: 0.5rem;
         border: 2px dashed rgba(255,255,255,0.3);
     }
 
-    /* Alerts */
     .stAlert { border-radius:16px; border:none; backdrop-filter:blur(8px); }
     .stAlert > div { border-radius:16px; }
 
-    /* Welcome */
     .welcome-card {
         background: rgba(255,255,255,0.92); backdrop-filter: blur(20px);
         border: 1px solid rgba(255,255,255,0.5); border-radius: 28px;
@@ -266,7 +286,6 @@ CUSTOM_CSS = """
     }
     .step-text { font-size:0.95rem; font-weight:500; color:var(--gray-800); }
 
-    /* Stats grid */
     .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1.25rem; }
     .stat-card {
         background:linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));
@@ -278,7 +297,6 @@ CUSTOM_CSS = """
     .stat-label { font-size:0.85rem; color:var(--gray-600); }
     .stat-value { font-size:0.95rem; font-weight:700; color:var(--gray-900); }
 
-    /* Quality Score */
     .quality-score { background:rgba(255,255,255,0.9); border-radius:20px; padding:1.75rem; text-align:center; margin-top:1.25rem; border:1px solid rgba(255,255,255,0.3); }
     .score-circle {
         width:130px; height:130px; border-radius:50%; display:flex; flex-direction:column;
@@ -290,26 +308,13 @@ CUSTOM_CSS = """
     .score-circle.poor { background:linear-gradient(135deg,#ef4444,#dc2626); }
     .score-label { font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-top:0.4rem; color:var(--gray-600); }
 
-    /* Pipeline card */
-    .pipeline-card {
+    .example-card {
         background: rgba(255,255,255,0.9); border-radius: 20px; padding: 1.5rem;
-        border: 1px solid rgba(99,102,241,0.15); margin-bottom: 1rem;
+        border: 1px solid rgba(99,102,241,0.15); margin-bottom: 1.25rem;
     }
-    .pipeline-step {
-        display: flex; align-items: flex-start; gap: 1rem; padding: 0.75rem 0;
-        border-bottom: 1px solid rgba(99,102,241,0.08);
-    }
-    .pipeline-step:last-child { border-bottom: none; }
-    .pipeline-badge {
-        width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center;
-        justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0; color: white;
-    }
-    .pipeline-badge.extract { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-    .pipeline-badge.rules { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .pipeline-badge.ml { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-    .pipeline-badge.decision { background: linear-gradient(135deg, #10b981, #059669); }
+    .example-card.correct { border-left: 4px solid #10b981; }
+    .example-card.error { border-left: 4px solid #ef4444; }
 
-    /* Scrollbar & misc */
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
     html { scroll-behavior: smooth; }
     ::-webkit-scrollbar { width:8px; height:8px; }
@@ -324,7 +329,7 @@ CUSTOM_CSS = """
 # =============================================================================
 
 class FeatureExtractor:
-    """Extract geometric features per LINESTRING for QA analysis."""
+    """Extract per-segment features focused on endpoint connectivity."""
 
     def __init__(self, lines: List[LineString], precision: int = 6):
         self.lines = lines
@@ -342,14 +347,7 @@ class FeatureExtractor:
             self._endpoint_map[self._round(coords[-1])].append(idx)
 
     def extract_all(self) -> pd.DataFrame:
-        """Return a DataFrame with one row per LINESTRING and all features."""
         rows = []
-        all_endpoints = []
-        for line in self.lines:
-            c = list(line.coords)
-            all_endpoints.append(self._round(c[0]))
-            all_endpoints.append(self._round(c[-1]))
-
         for idx, line in enumerate(self.lines):
             coords = list(line.coords)
             length = line.length
@@ -357,16 +355,15 @@ class FeatureExtractor:
             vertex_density = n_vertices / length if length > 0 else 0
             start = self._round(coords[0])
             end = self._round(coords[-1])
-
-            # Connectivity: how many OTHER segments share each endpoint
             start_degree = len(self._endpoint_map[start])
             end_degree = len(self._endpoint_map[end])
 
-            # Min distance from each endpoint to nearest OTHER line
-            start_pt = Point(start)
-            end_pt = Point(end)
+            # Nearest distance from each endpoint to any OTHER line
+            start_pt, end_pt = Point(start), Point(end)
             min_dist_start = float('inf')
             min_dist_end = float('inf')
+            nearest_seg_start = -1
+            nearest_seg_end = -1
             for j, other in enumerate(self.lines):
                 if j == idx:
                     continue
@@ -374,8 +371,10 @@ class FeatureExtractor:
                 d_e = end_pt.distance(other)
                 if d_s < min_dist_start:
                     min_dist_start = d_s
+                    nearest_seg_start = j + 1
                 if d_e < min_dist_end:
                     min_dist_end = d_e
+                    nearest_seg_end = j + 1
             connectivity_score = min(min_dist_start, min_dist_end)
 
             rows.append({
@@ -388,100 +387,84 @@ class FeatureExtractor:
                 'start_degree': start_degree,
                 'end_degree': end_degree,
                 'connectivity_score': round(connectivity_score, 4),
+                'min_gap_start': round(min_dist_start, 4),
+                'min_gap_end': round(min_dist_end, 4),
+                'nearest_seg_start': nearest_seg_start,
+                'nearest_seg_end': nearest_seg_end,
             })
-
         return pd.DataFrame(rows)
 
 
 # =============================================================================
-# CORE ENGINE — Rule-Based Validator (Option B)
+# CORE ENGINE — Gap Detector (ONE error type: endpoint gaps)
 # =============================================================================
 
-class RuleBasedValidator:
+class GapDetector:
     """
-    Data-driven rule-based validation.  No hardcoded thresholds — all derived
-    from percentile analysis of the dataset itself.
+    Detects the ONE error type: route continuity gaps.
+    A gap exists when a dangling endpoint (degree == 1) is near but not
+    touching another road segment — the coordinates don't match exactly,
+    breaking route continuity.
+    All thresholds derived from the dataset itself (no hardcoded values).
     """
 
-    def validate(self, features: pd.DataFrame) -> List[Dict]:
-        """Run all rule checks and return list of issue dicts."""
+    def detect(self, features: pd.DataFrame) -> List[Dict]:
         issues: List[Dict] = []
 
-        # --- Rule 1: Orphaned / Isolated Segments (low connectivity) --------
-        # A segment whose BOTH endpoints connect to nothing else (degree == 1 each)
-        # AND connectivity_score is high means it is spatially orphaned.
-        conn_threshold = np.percentile(features['connectivity_score'], 75)
-        for _, row in features.iterrows():
-            if row['start_degree'] <= 1 and row['end_degree'] <= 1 and row['connectivity_score'] > conn_threshold:
-                issues.append({
-                    'geometry_id': int(row['geometry_id']),
-                    'error_type': 'ISOLATED_SEGMENT',
-                    'description': 'Both endpoints are disconnected from the rest of the network',
-                    'connectivity_score': float(row['connectivity_score']),
-                    'start': (row['start_x'], row['start_y']),
-                    'end': (row['end_x'], row['end_y']),
-                    'confidence': min(1.0, row['connectivity_score'] / (conn_threshold * 2)),
-                    'source': 'rule',
-                })
+        # Compute adaptive gap threshold from dangling endpoints
+        dangling_mask = (features['start_degree'] == 1) | (features['end_degree'] == 1)
+        gap_values = features.loc[dangling_mask, 'connectivity_score']
+        positive_gaps = gap_values[gap_values > 0]
 
-        # --- Rule 2: Extremely Short Segments (percentile-based) -------------
-        p5 = np.percentile(features['length'], 5)
-        median_len = np.median(features['length'])
-        short_threshold = max(p5, median_len * 0.02)  # whichever is more generous
-        for _, row in features.iterrows():
-            if row['length'] <= short_threshold:
-                issues.append({
-                    'geometry_id': int(row['geometry_id']),
-                    'error_type': 'UNREALISTICALLY_SHORT',
-                    'description': f"Segment length {row['length']:.4f} is below the 5th-percentile threshold ({short_threshold:.4f})",
-                    'length': float(row['length']),
-                    'start': (row['start_x'], row['start_y']),
-                    'end': (row['end_x'], row['end_y']),
-                    'confidence': min(1.0, 1 - row['length'] / short_threshold) if short_threshold > 0 else 1.0,
-                    'source': 'rule',
-                })
-
-        # --- Rule 3: Endpoint Gaps — Broken Continuity (adaptive) -----------
-        # For each dangling endpoint (degree == 1), measure gap to nearest road.
-        # Flag if gap > 0 but < adaptive threshold (dataset-derived).
-        gap_values = features.loc[
-            (features['start_degree'] == 1) | (features['end_degree'] == 1),
-            'connectivity_score'
-        ]
-        if len(gap_values) > 0:
-            gap_threshold = np.percentile(gap_values[gap_values > 0], 50) if len(gap_values[gap_values > 0]) > 0 else 5.0
+        if len(positive_gaps) > 0:
+            gap_threshold = np.percentile(positive_gaps, 50)
         else:
             gap_threshold = 5.0
 
         for _, row in features.iterrows():
-            # Check start endpoint
-            if row['start_degree'] == 1 and 0 < row['connectivity_score'] < gap_threshold:
+            gid = int(row['geometry_id'])
+
+            # Check START endpoint
+            if row['start_degree'] == 1 and 0 < row['min_gap_start'] < gap_threshold:
+                gap = float(row['min_gap_start'])
                 issues.append({
-                    'geometry_id': int(row['geometry_id']),
+                    'geometry_id': gid,
                     'error_type': 'ENDPOINT_GAP',
-                    'description': f"Dangling start endpoint is {row['connectivity_score']:.4f} units from nearest road (threshold: {gap_threshold:.4f})",
-                    'gap_distance': float(row['connectivity_score']),
-                    'endpoint': (row['start_x'], row['start_y']),
+                    'endpoint': 'start',
+                    'description': (
+                        f"Start endpoint ({row['start_x']}, {row['start_y']}) has a "
+                        f"{gap:.4f}-unit gap to nearest segment #{int(row['nearest_seg_start'])}. "
+                        f"Route continuity is broken."
+                    ),
+                    'gap_distance': gap,
+                    'gap_to_segment': int(row['nearest_seg_start']),
+                    'location': (row['start_x'], row['start_y']),
                     'start': (row['start_x'], row['start_y']),
                     'end': (row['end_x'], row['end_y']),
-                    'confidence': min(1.0, 1 - row['connectivity_score'] / gap_threshold),
+                    'confidence': min(1.0, 1 - gap / gap_threshold),
                     'source': 'rule',
                 })
-            if row['end_degree'] == 1 and 0 < row['connectivity_score'] < gap_threshold:
-                # Avoid duplicate if both endpoints dangling with same score
-                existing = [i for i in issues if i['geometry_id'] == int(row['geometry_id']) and i['error_type'] == 'ENDPOINT_GAP']
-                if not existing:
-                    issues.append({
-                        'geometry_id': int(row['geometry_id']),
-                        'error_type': 'ENDPOINT_GAP',
-                        'description': f"Dangling end endpoint is {row['connectivity_score']:.4f} units from nearest road (threshold: {gap_threshold:.4f})",
-                        'gap_distance': float(row['connectivity_score']),
-                        'endpoint': (row['end_x'], row['end_y']),
-                        'start': (row['start_x'], row['start_y']),
-                        'end': (row['end_x'], row['end_y']),
-                        'confidence': min(1.0, 1 - row['connectivity_score'] / gap_threshold),
-                        'source': 'rule',
-                    })
+
+            # Check END endpoint
+            if row['end_degree'] == 1 and 0 < row['min_gap_end'] < gap_threshold:
+                gap = float(row['min_gap_end'])
+                issues.append({
+                    'geometry_id': gid,
+                    'error_type': 'ENDPOINT_GAP',
+                    'endpoint': 'end',
+                    'description': (
+                        f"End endpoint ({row['end_x']}, {row['end_y']}) has a "
+                        f"{gap:.4f}-unit gap to nearest segment #{int(row['nearest_seg_end'])}. "
+                        f"Route continuity is broken."
+                    ),
+                    'gap_distance': gap,
+                    'gap_to_segment': int(row['nearest_seg_end']),
+                    'location': (row['end_x'], row['end_y']),
+                    'start': (row['start_x'], row['start_y']),
+                    'end': (row['end_x'], row['end_y']),
+                    'confidence': min(1.0, 1 - gap / gap_threshold),
+                    'source': 'rule',
+                })
 
         return issues
 
@@ -491,48 +474,45 @@ class RuleBasedValidator:
 # =============================================================================
 
 class AnomalyDetector:
-    """Unsupervised anomaly detection using Isolation Forest on extracted features."""
+    """Isolation Forest to flag segments with anomalous connectivity — supports gap detection."""
 
     def __init__(self, contamination: float = 0.15):
         self.contamination = contamination
-        self.model = None
         self.scaler = StandardScaler()
 
     def detect(self, features: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dict]]:
-        """
-        Train Isolation Forest on dataset and return anomaly flags + issues.
-        """
         feat_cols = ['length', 'n_vertices', 'vertex_density', 'connectivity_score',
-                     'start_degree', 'end_degree']
-        X = features[feat_cols].values
+                     'start_degree', 'end_degree', 'min_gap_start', 'min_gap_end']
+        X = features[feat_cols].copy()
+        X = X.replace([np.inf, -np.inf], 999999)
+        X_scaled = self.scaler.fit_transform(X.values)
 
-        X_scaled = self.scaler.fit_transform(X)
-
-        self.model = IsolationForest(
-            contamination=self.contamination,
-            n_estimators=100,
-            random_state=42,
-        )
-        preds = self.model.fit_predict(X_scaled)
-        scores = self.model.decision_function(X_scaled)
+        model = IsolationForest(contamination=self.contamination, n_estimators=100, random_state=42)
+        preds = model.fit_predict(X_scaled)
+        scores = model.decision_function(X_scaled)
 
         features = features.copy()
         features['ml_anomaly'] = (preds == -1).astype(int)
-        features['ml_score'] = np.round(-scores, 4)  # higher = more anomalous
+        features['ml_score'] = np.round(-scores, 4)
 
         issues: List[Dict] = []
         for _, row in features[features['ml_anomaly'] == 1].iterrows():
             issues.append({
                 'geometry_id': int(row['geometry_id']),
-                'error_type': 'ML_ANOMALY',
-                'description': f"Isolation Forest flagged as geometric outlier (score: {row['ml_score']:.4f})",
-                'ml_score': float(row['ml_score']),
+                'error_type': 'ENDPOINT_GAP',
+                'endpoint': 'ml_flagged',
+                'description': (
+                    f"ML model flagged segment #{int(row['geometry_id'])} as having "
+                    f"anomalous connectivity (score: {row['ml_score']:.4f}). "
+                    f"Potential hidden gap or unusual endpoint pattern."
+                ),
+                'gap_distance': float(row['connectivity_score']),
+                'location': (row['start_x'], row['start_y']),
                 'start': (row['start_x'], row['start_y']),
                 'end': (row['end_x'], row['end_y']),
                 'confidence': min(1.0, float(row['ml_score']) / 0.5) if row['ml_score'] > 0 else 0.3,
                 'source': 'ml',
             })
-
         return features, issues
 
 
@@ -541,11 +521,9 @@ class AnomalyDetector:
 # =============================================================================
 
 class DecisionEngine:
-    """Combines rule-based and ML flags into a single QA report with confidence."""
-
     @staticmethod
     def combine(rule_issues: List[Dict], ml_issues: List[Dict]) -> List[Dict]:
-        """Merge and deduplicate issues, boosting confidence for double-flagged segments."""
+        """Merge, deduplicate, boost confidence for double-flagged."""
         by_id: Dict[int, List[Dict]] = defaultdict(list)
         for issue in rule_issues + ml_issues:
             by_id[issue['geometry_id']].append(issue)
@@ -556,24 +534,19 @@ class DecisionEngine:
         for gid, items in by_id.items():
             sources = set(i['source'] for i in items)
             both = 'rule' in sources and 'ml' in sources
-
             for item in items:
-                key = (item['geometry_id'], item['error_type'])
+                key = (item['geometry_id'], item.get('endpoint', ''))
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
-
                 entry = dict(item)
                 if both:
                     entry['confidence'] = min(1.0, entry.get('confidence', 0.5) * 1.3)
                     entry['confirmed_by'] = 'rule+ml'
                 else:
                     entry['confirmed_by'] = entry['source']
-
-                # Severity label
                 c = entry['confidence']
                 entry['severity'] = 'HIGH' if c >= 0.7 else ('MEDIUM' if c >= 0.4 else 'LOW')
-
                 final.append(entry)
 
         final.sort(key=lambda x: -x['confidence'])
@@ -581,278 +554,78 @@ class DecisionEngine:
 
 
 # =============================================================================
-# CORE ENGINE — Geometry Quality Checks (self-intersect, dups, angles)
-# =============================================================================
-
-class GeometryChecker:
-    """Additional geometric quality checks beyond connectivity."""
-
-    def __init__(self, lines: List[LineString], precision: int = 6):
-        self.lines = lines
-        self.precision = precision
-
-    def check_all(self) -> List[Dict]:
-        issues: List[Dict] = []
-        issues.extend(self._check_self_intersections())
-        issues.extend(self._check_duplicates())
-        issues.extend(self._check_minimum_angles())
-        return issues
-
-    def _check_self_intersections(self) -> List[Dict]:
-        issues = []
-        for idx, line in enumerate(self.lines):
-            if not line.is_simple:
-                coords = list(line.coords)
-                issues.append({
-                    'geometry_id': idx + 1,
-                    'error_type': 'SELF_INTERSECTION',
-                    'description': f'Segment #{idx+1} intersects itself — geometry is not simple',
-                    'start': (round(coords[0][0], self.precision), round(coords[0][1], self.precision)),
-                    'end': (round(coords[-1][0], self.precision), round(coords[-1][1], self.precision)),
-                    'confidence': 0.95,
-                    'source': 'geometry',
-                })
-        return issues
-
-    def _check_duplicates(self) -> List[Dict]:
-        issues = []
-        checked = set()
-        for i, j in combinations(range(len(self.lines)), 2):
-            if (i, j) in checked:
-                continue
-            checked.add((i, j))
-            if self.lines[i].equals(self.lines[j]):
-                coords_i = list(self.lines[i].coords)
-                issues.append({
-                    'geometry_id': j + 1,
-                    'error_type': 'DUPLICATE_SEGMENT',
-                    'description': f'Segment #{j+1} is an exact duplicate of segment #{i+1}',
-                    'duplicate_of': i + 1,
-                    'start': (round(coords_i[0][0], self.precision), round(coords_i[0][1], self.precision)),
-                    'end': (round(coords_i[-1][0], self.precision), round(coords_i[-1][1], self.precision)),
-                    'confidence': 1.0,
-                    'source': 'geometry',
-                })
-            elif self.lines[i].buffer(0.001).contains(self.lines[j]) or \
-                 self.lines[j].buffer(0.001).contains(self.lines[i]):
-                coords_j = list(self.lines[j].coords)
-                issues.append({
-                    'geometry_id': j + 1,
-                    'error_type': 'NEAR_DUPLICATE',
-                    'description': f'Segment #{j+1} nearly overlaps segment #{i+1}',
-                    'duplicate_of': i + 1,
-                    'start': (round(coords_j[0][0], self.precision), round(coords_j[0][1], self.precision)),
-                    'end': (round(coords_j[-1][0], self.precision), round(coords_j[-1][1], self.precision)),
-                    'confidence': 0.8,
-                    'source': 'geometry',
-                })
-        return issues
-
-    def _check_minimum_angles(self) -> List[Dict]:
-        """Flag segments with extremely sharp turns (< 10 degrees)."""
-        issues = []
-        min_angle_deg = 10.0
-        for idx, line in enumerate(self.lines):
-            coords = list(line.coords)
-            if len(coords) < 3:
-                continue
-            for k in range(1, len(coords) - 1):
-                ax, ay = coords[k-1]
-                bx, by = coords[k]
-                cx, cy = coords[k+1]
-                v1x, v1y = ax - bx, ay - by
-                v2x, v2y = cx - bx, cy - by
-                dot = v1x * v2x + v1y * v2y
-                m1 = math.sqrt(v1x**2 + v1y**2)
-                m2 = math.sqrt(v2x**2 + v2y**2)
-                if m1 == 0 or m2 == 0:
-                    continue
-                cos_angle = max(-1, min(1, dot / (m1 * m2)))
-                angle = math.degrees(math.acos(cos_angle))
-                if angle < min_angle_deg:
-                    issues.append({
-                        'geometry_id': idx + 1,
-                        'error_type': 'SHARP_ANGLE',
-                        'description': f'Vertex at ({bx:.2f}, {by:.2f}) has a {angle:.1f}° angle (threshold: {min_angle_deg}°)',
-                        'angle': round(angle, 2),
-                        'vertex': (round(bx, self.precision), round(by, self.precision)),
-                        'start': (round(coords[0][0], self.precision), round(coords[0][1], self.precision)),
-                        'end': (round(coords[-1][0], self.precision), round(coords[-1][1], self.precision)),
-                        'confidence': min(1.0, 1 - angle / min_angle_deg),
-                        'source': 'geometry',
-                    })
-                    break  # one per segment
-        return issues
-
-
-# =============================================================================
 # CORE ENGINE — Auto-Fix Suggestions
 # =============================================================================
 
 class AutoFixer:
-    """Generate coordinate correction suggestions for endpoint gaps."""
+    """Suggest snapping coordinates to fix endpoint gaps."""
 
     def __init__(self, lines: List[LineString], precision: int = 6):
         self.lines = lines
         self.precision = precision
 
     def suggest_fixes(self, issues: List[Dict]) -> List[Dict]:
-        """For ENDPOINT_GAP issues, suggest snapping to the nearest road."""
         suggestions = []
         for issue in issues:
-            if issue['error_type'] != 'ENDPOINT_GAP':
+            if issue.get('endpoint') == 'ml_flagged':
                 continue
             gid = issue['geometry_id'] - 1
             if gid >= len(self.lines):
                 continue
             line = self.lines[gid]
             coords = list(line.coords)
-            start_pt = Point(coords[0])
-            end_pt = Point(coords[-1])
+            is_start = issue.get('endpoint') == 'start'
+            coord_idx = 0 if is_start else -1
+            pt = Point(coords[coord_idx])
 
-            # Find nearest point on any other line for each endpoint
-            for label, pt, coord_idx in [('start', start_pt, 0), ('end', end_pt, -1)]:
-                best_dist = float('inf')
-                best_snap = None
-                best_target = None
-                for j, other in enumerate(self.lines):
-                    if j == gid:
-                        continue
-                    nearest = other.interpolate(other.project(pt))
-                    d = pt.distance(nearest)
-                    if d < best_dist and d > 0:
-                        best_dist = d
-                        best_snap = (round(nearest.x, self.precision), round(nearest.y, self.precision))
-                        best_target = j + 1
+            best_dist = float('inf')
+            best_snap = None
+            best_target = None
+            for j, other in enumerate(self.lines):
+                if j == gid:
+                    continue
+                nearest = other.interpolate(other.project(pt))
+                d = pt.distance(nearest)
+                if 0 < d < best_dist:
+                    best_dist = d
+                    best_snap = (round(nearest.x, self.precision), round(nearest.y, self.precision))
+                    best_target = j + 1
 
-                if best_snap and best_dist < issue.get('gap_distance', float('inf')) * 2:
-                    original = (round(coords[coord_idx][0], self.precision), round(coords[coord_idx][1], self.precision))
-                    suggestions.append({
-                        'geometry_id': issue['geometry_id'],
-                        'fix_type': 'SNAP_ENDPOINT',
-                        'endpoint': label,
-                        'original_coord': original,
-                        'suggested_coord': best_snap,
-                        'snap_to_segment': best_target,
-                        'distance': round(best_dist, 4),
-                        'description': f"Snap {label} endpoint from ({original[0]}, {original[1]}) → ({best_snap[0]}, {best_snap[1]}) (distance: {best_dist:.4f})",
-                    })
+            if best_snap:
+                original = (round(coords[coord_idx][0], self.precision),
+                            round(coords[coord_idx][1], self.precision))
+                suggestions.append({
+                    'geometry_id': issue['geometry_id'],
+                    'fix_type': 'SNAP_ENDPOINT',
+                    'endpoint': issue.get('endpoint', 'unknown'),
+                    'original_coord': original,
+                    'suggested_coord': best_snap,
+                    'snap_to_segment': best_target,
+                    'distance': round(best_dist, 4),
+                    'description': (
+                        f"Snap {issue.get('endpoint','')} endpoint from "
+                        f"({original[0]}, {original[1]}) → ({best_snap[0]}, {best_snap[1]}) "
+                        f"to close {best_dist:.4f}-unit gap"
+                    ),
+                })
         return suggestions
 
 
 # =============================================================================
-# CORE ENGINE — Multi-File Comparison (Network Diff)
-# =============================================================================
-
-class NetworkComparator:
-    """Compare two WKT datasets and highlight differences."""
-
-    def __init__(self, precision: int = 6):
-        self.precision = precision
-
-    def compare(self, old_lines: List[LineString], new_lines: List[LineString]) -> Dict:
-        """Compare old and new networks, return diff report."""
-        old_set = set()
-        new_set = set()
-        for line in old_lines:
-            old_set.add(self._line_key(line))
-        for line in new_lines:
-            new_set.add(self._line_key(line))
-
-        added_keys = new_set - old_set
-        removed_keys = old_set - new_set
-        unchanged_keys = old_set & new_set
-
-        added_lines = [l for l in new_lines if self._line_key(l) in added_keys]
-        removed_lines = [l for l in old_lines if self._line_key(l) in removed_keys]
-
-        return {
-            'old_count': len(old_lines),
-            'new_count': len(new_lines),
-            'added': len(added_keys),
-            'removed': len(removed_keys),
-            'unchanged': len(unchanged_keys),
-            'added_lines': added_lines,
-            'removed_lines': removed_lines,
-        }
-
-    def _line_key(self, line: LineString) -> Tuple:
-        return tuple((round(c[0], self.precision), round(c[1], self.precision)) for c in line.coords)
-
-
-# =============================================================================
-# CORE ENGINE — PDF Report Generator
-# =============================================================================
-
-def generate_pdf_report(stats: Dict, issues: List[Dict], fixes: List[Dict]) -> bytes:
-    """Generate a PDF QA report as bytes (pure Python, no external PDF lib needed)."""
-    # Build a simple text-based PDF manually (no fpdf dependency)
-    lines_out = []
-    lines_out.append("=" * 72)
-    lines_out.append("ROUTE INTEGRITY QA REPORT")
-    lines_out.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines_out.append(f"Team: {APP_CONFIG['team']} | Version: {APP_CONFIG['version']}")
-    lines_out.append("=" * 72)
-    lines_out.append("")
-
-    lines_out.append("NETWORK SUMMARY")
-    lines_out.append("-" * 40)
-    lines_out.append(f"  Total Segments:    {stats['total_segments']}")
-    lines_out.append(f"  Total Length:      {stats['total_length']:,.2f}")
-    lines_out.append(f"  Avg Segment:       {stats['avg_length']:.2f}")
-    lines_out.append(f"  Shortest:          {stats['min_length']:.4f}")
-    lines_out.append(f"  Longest:           {stats['max_length']:.2f}")
-    lines_out.append(f"  Total Nodes:       {stats['total_endpoints']}")
-    lines_out.append(f"  Connected Nodes:   {stats['connected_nodes']}")
-    lines_out.append(f"  Dangling Nodes:    {stats['dangling_nodes']}")
-    lines_out.append("")
-
-    lines_out.append(f"ISSUES DETECTED: {len(issues)}")
-    lines_out.append("-" * 40)
-    if issues:
-        high = sum(1 for i in issues if i.get('severity') == 'HIGH')
-        med = sum(1 for i in issues if i.get('severity') == 'MEDIUM')
-        low = sum(1 for i in issues if i.get('severity') == 'LOW')
-        lines_out.append(f"  HIGH: {high}  |  MEDIUM: {med}  |  LOW: {low}")
-        lines_out.append("")
-        for idx, issue in enumerate(issues, 1):
-            lines_out.append(f"  [{idx}] Segment #{issue['geometry_id']} — {issue['error_type']}")
-            lines_out.append(f"      Severity: {issue.get('severity', 'N/A')}  |  Confidence: {issue.get('confidence', 0):.0%}")
-            lines_out.append(f"      Source: {issue.get('confirmed_by', issue.get('source', ''))}")
-            lines_out.append(f"      {issue.get('description', '')}")
-            lines_out.append("")
-    else:
-        lines_out.append("  No issues detected. Network quality is excellent.")
-        lines_out.append("")
-
-    if fixes:
-        lines_out.append(f"AUTO-FIX SUGGESTIONS: {len(fixes)}")
-        lines_out.append("-" * 40)
-        for idx, fix in enumerate(fixes, 1):
-            lines_out.append(f"  [{idx}] Segment #{fix['geometry_id']} — {fix['fix_type']}")
-            lines_out.append(f"      {fix['description']}")
-            lines_out.append("")
-
-    lines_out.append("=" * 72)
-    lines_out.append("End of Report")
-
-    return "\n".join(lines_out).encode('utf-8')
-
-
-# =============================================================================
-# CORE ENGINE — QA Report Builder
+# CORE ENGINE — Report Builder
 # =============================================================================
 
 def build_error_report(issues: List[Dict], fixes: Optional[List[Dict]] = None) -> Dict:
-    """Build the error_report.json structure per hackathon spec."""
     report_items = []
     for issue in issues:
         report_items.append({
             'geometry_id': issue['geometry_id'],
             'error_type': issue['error_type'],
+            'endpoint': issue.get('endpoint', ''),
             'severity': issue.get('severity', 'MEDIUM'),
             'confidence': round(issue.get('confidence', 0.5), 4),
             'description': issue.get('description', ''),
+            'gap_distance': issue.get('gap_distance', 0),
             'coordinates': {
                 'start': list(issue.get('start', (0, 0))),
                 'end': list(issue.get('end', (0, 0))),
@@ -862,10 +635,48 @@ def build_error_report(issues: List[Dict], fixes: Optional[List[Dict]] = None) -
     return {
         'report_version': APP_CONFIG['version'],
         'team': APP_CONFIG['team'],
-        'total_issues': len(report_items),
+        'error_type_focus': APP_CONFIG['error_type'],
+        'total_gaps_found': len(report_items),
         'issues': report_items,
         'auto_fix_suggestions': fixes or [],
     }
+
+
+def generate_text_report(stats: Dict, issues: List[Dict], fixes: List[Dict]) -> bytes:
+    out = []
+    out.append("=" * 72)
+    out.append("ROUTE CONTINUITY GAP DETECTION REPORT")
+    out.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    out.append(f"Team: {APP_CONFIG['team']} | Version: {APP_CONFIG['version']}")
+    out.append(f"Error Type: {APP_CONFIG['error_label']}")
+    out.append("=" * 72)
+    out.append("")
+    out.append("NETWORK SUMMARY")
+    out.append("-" * 40)
+    out.append(f"  Total Segments:    {stats['total_segments']}")
+    out.append(f"  Total Length:      {stats['total_length']:,.2f}")
+    out.append(f"  Connected Nodes:   {stats['connected_nodes']}")
+    out.append(f"  Dangling Nodes:    {stats['dangling_nodes']}")
+    out.append("")
+    out.append(f"GAPS DETECTED: {len(issues)}")
+    out.append("-" * 40)
+    if issues:
+        for idx, issue in enumerate(issues, 1):
+            out.append(f"  [{idx}] Segment #{issue['geometry_id']} ({issue.get('endpoint','')}) — {issue.get('severity','')}")
+            out.append(f"      Gap: {issue.get('gap_distance',0):.4f} units | Confidence: {issue.get('confidence',0):.0%}")
+            out.append(f"      {issue.get('description','')}")
+            out.append("")
+    else:
+        out.append("  No gaps detected. Route continuity is intact.")
+        out.append("")
+    if fixes:
+        out.append(f"FIX SUGGESTIONS: {len(fixes)}")
+        out.append("-" * 40)
+        for idx, fix in enumerate(fixes, 1):
+            out.append(f"  [{idx}] {fix['description']}")
+            out.append("")
+    out.append("=" * 72)
+    return "\n".join(out).encode('utf-8')
 
 
 # =============================================================================
@@ -873,7 +684,6 @@ def build_error_report(issues: List[Dict], fixes: Optional[List[Dict]] = None) -
 # =============================================================================
 
 def parse_wkt(wkt_text: str) -> List[LineString]:
-    """Parse WKT text to list of valid LineStrings."""
     cleaned = re.sub(r'\s+', ' ', wkt_text)
     matches = re.findall(r'LINESTRING\s*\([^)]+\)', cleaned, re.IGNORECASE)
     lines = []
@@ -892,11 +702,9 @@ def parse_wkt(wkt_text: str) -> List[LineString]:
 # =============================================================================
 
 def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
-    """Create a beautiful Folium map showing the network and flagged issues."""
     if not lines:
         return folium.Map(location=[0, 0], zoom_start=2, tiles='cartodbpositron')
 
-    # Compute bounds
     all_x, all_y = [], []
     for line in lines:
         for c in line.coords:
@@ -910,17 +718,15 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
     m = folium.Map(location=[0, 0], zoom_start=15, tiles='cartodbdark_matter')
     folium.TileLayer('cartodbpositron', name='Light').add_to(m)
 
-    # Flagged geometry IDs
     flagged_ids = set(i['geometry_id'] for i in issues)
     severity_map = {}
     for i in issues:
         gid = i['geometry_id']
-        if gid not in severity_map or i['severity'] == 'HIGH':
-            severity_map[gid] = i['severity']
+        if gid not in severity_map or i.get('severity') == 'HIGH':
+            severity_map[gid] = i.get('severity', 'MEDIUM')
 
-    # Draw roads
-    road_group = folium.FeatureGroup(name='🛣️ Road Network')
-    error_road_group = folium.FeatureGroup(name='⚠️ Flagged Segments')
+    road_group = folium.FeatureGroup(name='Road Network')
+    gap_group = folium.FeatureGroup(name='Gap Segments')
     for idx, line in enumerate(lines):
         gid = idx + 1
         coords = [norm(c[0], c[1]) for c in line.coords]
@@ -928,39 +734,37 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
             sev = severity_map.get(gid, 'MEDIUM')
             color = '#ef4444' if sev == 'HIGH' else '#f59e0b' if sev == 'MEDIUM' else '#60a5fa'
             folium.PolyLine(coords, color=color, weight=4, opacity=0.95,
-                tooltip=f"Segment #{gid} — {sev}").add_to(error_road_group)
+                tooltip=f"Seg #{gid} — GAP ({sev})").add_to(gap_group)
         else:
             folium.PolyLine(coords, color='#60a5fa', weight=2.5, opacity=0.7,
-                tooltip=f"Segment #{gid}").add_to(road_group)
+                tooltip=f"Seg #{gid}").add_to(road_group)
     road_group.add_to(m)
-    error_road_group.add_to(m)
+    gap_group.add_to(m)
 
-    # Error markers
     if issues:
-        marker_group = folium.FeatureGroup(name='📍 Error Locations')
-        for i, issue in enumerate(issues):
-            loc = norm(issue['start'][0], issue['start'][1])
+        marker_group = folium.FeatureGroup(name='Gap Locations')
+        for issue in issues:
+            loc_point = issue.get('location', issue.get('start', (cx, cy)))
+            loc = norm(loc_point[0], loc_point[1])
             sev = issue.get('severity', 'MEDIUM')
             color = '#ef4444' if sev == 'HIGH' else '#f59e0b' if sev == 'MEDIUM' else '#94a3b8'
-            icon_sym = '🔴' if sev == 'HIGH' else '🟠' if sev == 'MEDIUM' else '🔵'
 
-            # Glow
             folium.CircleMarker(location=loc, radius=16, color=color, fill=True,
                 fillColor=color, fillOpacity=0.2, weight=0).add_to(marker_group)
-            # Marker
             folium.CircleMarker(location=loc, radius=8, color='white', weight=2,
                 fill=True, fillColor=color, fillOpacity=0.95,
                 popup=folium.Popup(
-                    f"""<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:4px;">
-                    <h4 style="color:{color};margin:0 0 8px;font-weight:700;">{icon_sym} {issue['error_type']}</h4>
+                    f"""<div style="font-family:'DM Sans',sans-serif;min-width:220px;padding:4px;">
+                    <h4 style="color:{color};margin:0 0 8px;font-weight:700;">🔗 Route Gap</h4>
                     <div style="background:#f8fafc;border-radius:8px;padding:8px;">
                         <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Segment:</b> #{issue['geometry_id']}</p>
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Endpoint:</b> {issue.get('endpoint','')}</p>
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Gap:</b> {issue.get('gap_distance',0):.4f} units</p>
                         <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Confidence:</b> {issue.get('confidence',0):.0%}</p>
                         <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Severity:</b>
                             <span style="background:{color};color:white;padding:1px 8px;border-radius:12px;font-size:0.75rem;">{sev}</span></p>
-                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Source:</b> {issue.get('confirmed_by','')}</p>
                     </div></div>""", max_width=240),
-                tooltip=f"#{issue['geometry_id']} {issue['error_type']} ({sev})"
+                tooltip=f"#{issue['geometry_id']} Gap ({sev})"
             ).add_to(marker_group)
         marker_group.add_to(m)
 
@@ -971,67 +775,91 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
 
 
 # =============================================================================
+# COMPUTE STATS
+# =============================================================================
+
+def compute_stats(lines: List[LineString]) -> Dict:
+    lengths = [l.length for l in lines]
+    ep_count: Dict[Tuple, int] = defaultdict(int)
+    prec = APP_CONFIG['precision']
+    for line in lines:
+        c = list(line.coords)
+        s = (round(c[0][0], prec), round(c[0][1], prec))
+        e = (round(c[-1][0], prec), round(c[-1][1], prec))
+        ep_count[s] += 1
+        ep_count[e] += 1
+    return {
+        'total_segments': len(lines),
+        'total_length': round(sum(lengths), 2),
+        'avg_length': round(np.mean(lengths), 2),
+        'min_length': round(min(lengths), 4),
+        'max_length': round(max(lengths), 2),
+        'total_endpoints': len(ep_count),
+        'connected_nodes': sum(1 for c in ep_count.values() if c > 1),
+        'dangling_nodes': sum(1 for c in ep_count.values() if c == 1),
+    }
+
+
+# =============================================================================
 # UI COMPONENTS
 # =============================================================================
 
 def render_hero():
     st.markdown("""
         <div class="hero-container">
-            <div class="hero-icon">🛣️</div>
-            <h1 class="hero-title">Route Integrity QA</h1>
-            <p class="hero-subtitle">AI-powered quality assurance for ride-hailing routing infrastructure</p>
-            <div class="hero-badge"><span>✨</span><span>v5.0 • FutureFormers • IIT Mandi Hackathon</span></div>
+            <div class="hero-icon">🔍</div>
+            <h1 class="hero-title">Route Continuity Gap Detector</h1>
+            <p class="hero-subtitle">Detects endpoint gaps where road segments should connect but don't — breaking route continuity</p>
+            <div class="hero-badge"><span>🔗</span><span>ONE Error Type • Rule-Based + ML • Axes Systems GmbH</span></div>
         </div>
     """, unsafe_allow_html=True)
 
 
 def render_metrics(stats: Dict, issues: List[Dict]):
-    total = stats['total_segments']
-    n_issues = len(issues)
+    n_gaps = len(issues)
     high = sum(1 for i in issues if i.get('severity') == 'HIGH')
-    med = sum(1 for i in issues if i.get('severity') == 'MEDIUM')
-    ml_count = sum(1 for i in issues if i.get('source') == 'ml' or i.get('confirmed_by') == 'rule+ml')
+    dangling = stats['dangling_nodes']
     st.markdown(f"""
         <div class="metric-grid">
-            <div class="metric-card purple"><div class="metric-icon">🛣️</div><div class="metric-value">{total}</div><div class="metric-label">Segments</div></div>
-            <div class="metric-card blue"><div class="metric-icon">🔍</div><div class="metric-value">{n_issues}</div><div class="metric-label">Issues Found</div></div>
-            <div class="metric-card red"><div class="metric-icon">🚨</div><div class="metric-value">{high}</div><div class="metric-label">High Severity</div></div>
-            <div class="metric-card orange"><div class="metric-icon">⚡</div><div class="metric-value">{med}</div><div class="metric-label">Medium Severity</div></div>
-            <div class="metric-card green"><div class="metric-icon">🤖</div><div class="metric-value">{ml_count}</div><div class="metric-label">ML Flagged</div></div>
+            <div class="metric-card purple"><div class="metric-icon">🛣️</div><div class="metric-value">{stats['total_segments']}</div><div class="metric-label">Segments</div></div>
+            <div class="metric-card red"><div class="metric-icon">🔗</div><div class="metric-value">{n_gaps}</div><div class="metric-label">Gaps Found</div></div>
+            <div class="metric-card blue"><div class="metric-icon">🚨</div><div class="metric-value">{high}</div><div class="metric-label">High Severity</div></div>
+            <div class="metric-card green"><div class="metric-icon">📍</div><div class="metric-value">{dangling}</div><div class="metric-label">Dangling Nodes</div></div>
         </div>
     """, unsafe_allow_html=True)
 
 
-def render_pipeline_info():
-    st.markdown("""
-        <div class="pipeline-card">
-            <h4 style="margin:0 0 0.75rem;color:#1e293b;font-weight:700;">🔬 Detection Pipeline</h4>
-            <div class="pipeline-step">
-                <div class="pipeline-badge extract">A</div>
-                <div><b style="color:#1e293b;">Feature Extraction</b><br><span style="color:#64748b;font-size:0.85rem;">Length, vertices, vertex density, connectivity score per segment</span></div>
+def render_issue_table(issues: List[Dict]):
+    if not issues:
+        st.markdown("""
+            <div style="text-align:center;padding:2.5rem;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));border-radius:16px;">
+                <div style="font-size:3.5rem;margin-bottom:0.75rem;">✅</div>
+                <h3 style="color:#059669;margin:0 0 0.4rem;font-weight:700;">No Gaps Detected!</h3>
+                <p style="color:#64748b;margin:0;">Route continuity is intact — all endpoints connect properly.</p>
             </div>
-            <div class="pipeline-step">
-                <div class="pipeline-badge rules">B</div>
-                <div><b style="color:#1e293b;">Rule-Based Validation</b><br><span style="color:#64748b;font-size:0.85rem;">Orphaned segments, percentile-based short links, adaptive gap thresholds</span></div>
-            </div>
-            <div class="pipeline-step">
-                <div class="pipeline-badge" style="background:linear-gradient(135deg,#ec4899,#be185d);">C</div>
-                <div><b style="color:#1e293b;">Geometry Quality Checks</b><br><span style="color:#64748b;font-size:0.85rem;">Self-intersections, duplicate segments, sharp angle detection</span></div>
-            </div>
-            <div class="pipeline-step">
-                <div class="pipeline-badge ml">D</div>
-                <div><b style="color:#1e293b;">ML Anomaly Detection</b><br><span style="color:#64748b;font-size:0.85rem;">Isolation Forest trained on dataset — identifies geometric outliers</span></div>
-            </div>
-            <div class="pipeline-step">
-                <div class="pipeline-badge decision">E</div>
-                <div><b style="color:#1e293b;">Decision Logic</b><br><span style="color:#64748b;font-size:0.85rem;">Combine rule + geometry + ML flags, boost confidence for double-flagged, assign severity</span></div>
-            </div>
-            <div class="pipeline-step">
-                <div class="pipeline-badge" style="background:linear-gradient(135deg,#f97316,#c2410c);">F</div>
-                <div><b style="color:#1e293b;">Auto-Fix Suggestions</b><br><span style="color:#64748b;font-size:0.85rem;">Snap dangling endpoints to nearest road, generate corrected WKT</span></div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        return
+    rows = []
+    for i in issues:
+        rows.append({
+            'Seg #': i['geometry_id'],
+            'Endpoint': i.get('endpoint', ''),
+            'Gap (units)': f"{i.get('gap_distance', 0):.4f}",
+            'Severity': i.get('severity', 'MEDIUM'),
+            'Confidence': f"{i.get('confidence', 0):.0%}",
+            'Source': i.get('confirmed_by', i.get('source', '')),
+            'Description': i.get('description', '')[:70],
+        })
+    df = pd.DataFrame(rows)
+    df.index = df.index + 1
+    df.index.name = '#'
+
+    def style_sev(val):
+        if val == 'HIGH': return 'background:#fef2f2;color:#991b1b;font-weight:600;'
+        elif val == 'MEDIUM': return 'background:#fffbeb;color:#92400e;font-weight:600;'
+        return 'background:#f0f9ff;color:#1e40af;font-weight:600;'
+
+    st.dataframe(df.style.map(style_sev, subset=['Severity']), use_container_width=True, height=420)
 
 
 def render_stats(stats: Dict, issues: List[Dict]):
@@ -1057,178 +885,249 @@ def render_stats(stats: Dict, issues: List[Dict]):
         stats['total_endpoints'], stats['connected_nodes'], stats['dangling_nodes'], stats['total_segments']
     ), unsafe_allow_html=True)
 
-    # Quality Score
     if stats['total_segments'] > 0:
         error_rate = len(issues) / stats['total_segments'] * 100
-        quality = max(0, 100 - error_rate * 8)
+        quality = max(0, 100 - error_rate * 10)
         sc = "excellent" if quality >= 85 else "good" if quality >= 60 else "poor"
         sl = "Excellent" if quality >= 85 else "Good" if quality >= 60 else "Needs Attention"
         se = "🌟" if quality >= 85 else "👍" if quality >= 60 else "🔧"
         st.markdown(f"""
             <div class="quality-score">
-                <h3 style="margin:0 0 0.75rem;color:#1e293b;font-weight:700;">Network Quality Score</h3>
+                <h3 style="margin:0 0 0.75rem;color:#1e293b;font-weight:700;">Route Continuity Score</h3>
                 <div class="score-circle {sc}"><span>{quality:.0f}%</span></div>
                 <div class="score-label">{se} {sl}</div>
             </div>
         """, unsafe_allow_html=True)
 
 
-def render_issue_table(issues: List[Dict]):
-    if not issues:
-        st.markdown("""
-            <div style="text-align:center;padding:2.5rem;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));border-radius:16px;">
-                <div style="font-size:3.5rem;margin-bottom:0.75rem;">✅</div>
-                <h3 style="color:#059669;margin:0 0 0.4rem;font-weight:700;">All Clear!</h3>
-                <p style="color:#64748b;margin:0;">No route integrity issues detected.</p>
-            </div>
-        """, unsafe_allow_html=True)
+def render_examples():
+    """Demonstrate the error type on 2-3 built-in examples."""
+    st.markdown("""
+        <div class="section-header"><span class="icon">🧪</span><h3>Error Examples — Demonstration</h3></div>
+        <p style="color:#64748b;margin-bottom:1rem;font-size:0.9rem;">
+            Below are built-in examples showing <b>correct</b> road connections vs. <b>incorrect</b> ones with endpoint gaps.
+            Click "Run Analysis" on any example to see the detector in action.
+        </p>
+    """, unsafe_allow_html=True)
+
+    # ---- CORRECT EXAMPLE ----
+    st.markdown("""
+        <div class="example-card correct">
+            <h4 style="color:#059669;margin:0 0 0.5rem;">✅ Example: Correct — Fully Connected Network</h4>
+            <p style="color:#64748b;font-size:0.85rem;margin:0;">
+                All 5 segments share exact endpoints. No gaps detected.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    with st.expander("View WKT & Run Analysis"):
+        st.code(EXAMPLE_CORRECT, language="text")
+        if st.button("▶ Run on Correct Example", key="run_correct"):
+            _run_example(EXAMPLE_CORRECT, "correct")
+
+    # ---- ERROR EXAMPLE 1 ----
+    st.markdown("""
+        <div class="example-card error">
+            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 1: Two Endpoint Gaps (~0.5 units)</h4>
+            <p style="color:#64748b;font-size:0.85rem;margin:0;">
+                Segments 1→2 and 3→5 have small coordinate mismatches at their junction points.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    with st.expander("View WKT & Run Analysis"):
+        st.code(EXAMPLE_ERROR_1, language="text")
+        if st.button("▶ Run on Error Example 1", key="run_err1"):
+            _run_example(EXAMPLE_ERROR_1, "error1")
+
+    # ---- ERROR EXAMPLE 2 ----
+    st.markdown("""
+        <div class="example-card error">
+            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 2: Multiple Gaps in a Chain</h4>
+            <p style="color:#64748b;font-size:0.85rem;margin:0;">
+                A 6-segment chain with gaps at segments 3, 4, and 6 — breaking 3 continuity points.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    with st.expander("View WKT & Run Analysis"):
+        st.code(EXAMPLE_ERROR_2, language="text")
+        if st.button("▶ Run on Error Example 2", key="run_err2"):
+            _run_example(EXAMPLE_ERROR_2, "error2")
+
+    # ---- ERROR EXAMPLE 3 ----
+    st.markdown("""
+        <div class="example-card error">
+            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 3: Near-Miss Gaps (0.05–0.6 units)</h4>
+            <p style="color:#64748b;font-size:0.85rem;margin:0;">
+                Endpoints are very close but not touching — typical of coordinate rounding errors during data export.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    with st.expander("View WKT & Run Analysis"):
+        st.code(EXAMPLE_ERROR_3, language="text")
+        if st.button("▶ Run on Error Example 3", key="run_err3"):
+            _run_example(EXAMPLE_ERROR_3, "error3")
+
+
+def _run_example(wkt_data: str, label: str):
+    """Analyse an example dataset inline."""
+    lines = parse_wkt(wkt_data)
+    if not lines:
+        st.error("Could not parse example.")
         return
+    extractor = FeatureExtractor(lines, APP_CONFIG['precision'])
+    features = extractor.extract_all()
+    detector = GapDetector()
+    issues = detector.detect(features)
 
-    rows = []
-    for i in issues:
-        rows.append({
-            'Seg #': i['geometry_id'],
-            'Error Type': i['error_type'],
-            'Severity': i.get('severity', 'MEDIUM'),
-            'Confidence': f"{i.get('confidence', 0):.0%}",
-            'Source': i.get('confirmed_by', i.get('source', '')),
-            'Description': i.get('description', '')[:80],
-        })
-    df = pd.DataFrame(rows)
-    df.index = df.index + 1
-    df.index.name = '#'
+    if issues:
+        st.error(f"🔗 **{len(issues)} gap(s) detected!**")
+        for i, issue in enumerate(issues, 1):
+            st.markdown(f"**Gap {i}:** Segment #{issue['geometry_id']} ({issue.get('endpoint','')}) — "
+                        f"gap of **{issue.get('gap_distance',0):.4f}** units — "
+                        f"confidence {issue.get('confidence',0):.0%}")
+    else:
+        st.success("✅ **No gaps detected.** All endpoints connect properly.")
 
-    def style_sev(val):
-        if val == 'HIGH':
-            return 'background:#fef2f2;color:#991b1b;font-weight:600;'
-        elif val == 'MEDIUM':
-            return 'background:#fffbeb;color:#92400e;font-weight:600;'
-        return 'background:#f0f9ff;color:#1e40af;font-weight:600;'
-
-    styled = df.style.map(style_sev, subset=['Severity'])
-    st.dataframe(styled, use_container_width=True, height=420)
+    map_obj = create_map(lines, issues)
+    st_folium(map_obj, height=350, use_container_width=True)
 
 
-def render_feature_table(features: pd.DataFrame):
-    """Show the extracted feature matrix."""
-    display_cols = ['geometry_id', 'length', 'n_vertices', 'vertex_density',
-                    'connectivity_score', 'start_degree', 'end_degree']
-    extra_cols = [c for c in ['ml_anomaly', 'ml_score'] if c in features.columns]
-    df = features[display_cols + extra_cols].copy()
-    df.columns = ['Seg #', 'Length', 'Vertices', 'Vertex Density',
-                   'Connectivity', 'Start Deg', 'End Deg'] + \
-                  (['ML Flag', 'ML Score'] if extra_cols else [])
+def render_training():
+    """Training instructions — how to add more examples."""
+    st.markdown("""
+        <div class="section-header"><span class="icon">📚</span><h3>Training Instructions</h3></div>
+    """, unsafe_allow_html=True)
 
-    def style_anomaly(val):
-        if val == 1:
-            return 'background:#fef2f2;color:#991b1b;font-weight:700;'
-        return ''
+    st.markdown("""
+    ### How to Add More Training Examples
 
-    styled = df.style.format({
-        'Length': '{:.4f}', 'Vertex Density': '{:.6f}',
-        'Connectivity': '{:.4f}',
-    })
-    if 'ML Flag' in df.columns:
-        styled = styled.map(style_anomaly, subset=['ML Flag'])
-    st.dataframe(styled, use_container_width=True, height=420)
+    The system uses **unsupervised learning** (Isolation Forest) — it learns what "normal"
+    looks like from whatever dataset you upload, so **no manual labeling is needed**.
+    However, you can improve detection by adding more example data:
 
+    ---
 
-def compute_stats(lines: List[LineString], features: pd.DataFrame) -> Dict:
-    """Compute summary stats from lines & features."""
-    lengths = [l.length for l in lines]
-    # Build endpoint map for topology stats
-    ep_count: Dict[Tuple, int] = defaultdict(int)
-    prec = APP_CONFIG['precision']
-    for line in lines:
-        c = list(line.coords)
-        s = (round(c[0][0], prec), round(c[0][1], prec))
-        e = (round(c[-1][0], prec), round(c[-1][1], prec))
-        ep_count[s] += 1
-        ep_count[e] += 1
+    #### Step 1: Prepare Your WKT File
 
-    return {
-        'total_segments': len(lines),
-        'total_length': round(sum(lengths), 2),
-        'avg_length': round(np.mean(lengths), 2),
-        'min_length': round(min(lengths), 4),
-        'max_length': round(max(lengths), 2),
-        'total_endpoints': len(ep_count),
-        'connected_nodes': sum(1 for c in ep_count.values() if c > 1),
-        'dangling_nodes': sum(1 for c in ep_count.values() if c == 1),
-    }
+    Create a `.wkt` text file with LINESTRING geometries — one per line:
+
+    ```text
+    LINESTRING(x1 y1, x2 y2, x3 y3, ...)
+    LINESTRING(x4 y4, x5 y5, x6 y6, ...)
+    ```
+
+    Each LINESTRING represents a road segment. Coordinates can be in any projected CRS.
+
+    ---
+
+    #### Step 2: Include Known Errors
+
+    To test the system, deliberately introduce endpoint gaps:
+    - Take two segments that should connect: `...140 220)` and `LINESTRING(140 220, ...)`
+    - Shift one endpoint slightly: `LINESTRING(140.5 220.3, ...)` — this creates a gap
+    - The detector will flag the broken connection
+
+    ---
+
+    #### Step 3: Upload and Analyze
+
+    1. Use the **sidebar file uploader** to load your `.wkt` file
+    2. The system automatically extracts features, runs rules + ML, and reports gaps
+    3. Adjust the **Anomaly Sensitivity** slider to control how aggressively the ML flags outliers
+
+    ---
+
+    #### Step 4: Interpret Results
+
+    | Severity | Meaning |
+    |----------|---------|
+    | **HIGH** | Gap is small and clearly a broken connection (confidence ≥ 70%) |
+    | **MEDIUM** | Likely a gap but could be intentional (confidence 40-70%) |
+    | **LOW** | Possible gap but less certain (confidence < 40%) |
+
+    - **Source: rule** — detected by the data-driven gap rule
+    - **Source: ml** — detected by Isolation Forest anomaly model
+    - **Source: rule+ml** — flagged by both (highest reliability)
+
+    ---
+
+    #### Step 5: Use Auto-Fix
+
+    Go to the **🔧 Auto-Fix** tab to download a corrected `.wkt` file with gaps snapped closed.
+
+    ---
+
+    #### How the ML Learns
+
+    The Isolation Forest is **retrained on every upload** — it learns the statistical
+    distribution of your specific dataset's features (length, vertex density, connectivity).
+    Larger and more varied datasets produce more reliable anomaly detection.
+
+    **No saved model or manual labels are needed.** The system adapts automatically.
+    """)
 
 
 def render_welcome():
     st.markdown("""
         <div class="welcome-card">
-            <div class="welcome-icon">🛣️</div>
-            <h2 class="welcome-title">Route Integrity QA System</h2>
+            <div class="welcome-icon">🔍</div>
+            <h2 class="welcome-title">Route Continuity Gap Detector</h2>
             <p class="welcome-text">
-                AI-powered quality assurance for ride-hailing routing infrastructure.
-                Detect broken routes, isolated segments, and connectivity gaps using
-                rule-based validation and machine learning — with zero manual labeling.
+                Detects <b>one specific error</b>: endpoint gaps where road segments
+                should connect but have small coordinate mismatches, breaking route
+                continuity. Uses rule-based validation + Isolation Forest ML.
             </p>
             <div class="step-list">
                 <div class="step-item"><div class="step-number">1</div><span class="step-text">Upload a .wkt file or load the demo dataset</span></div>
-                <div class="step-item"><div class="step-number">2</div><span class="step-text">One-click analysis — no parameter tuning needed</span></div>
-                <div class="step-item"><div class="step-number">3</div><span class="step-text">Explore flagged issues on the interactive map</span></div>
-                <div class="step-item"><div class="step-number">4</div><span class="step-text">Download error_report.json for your records</span></div>
+                <div class="step-item"><div class="step-number">2</div><span class="step-text">One-click analysis finds all endpoint gaps</span></div>
+                <div class="step-item"><div class="step-number">3</div><span class="step-text">View gaps on the interactive map</span></div>
+                <div class="step-item"><div class="step-number">4</div><span class="step-text">Download auto-fixed .wkt or error report</span></div>
             </div>
         </div>
     """, unsafe_allow_html=True)
     with st.expander("📖 Supported Format"):
         st.code("LINESTRING(x1 y1, x2 y2, x3 y3, ...)\nLINESTRING(x1 y1, x2 y2, ...)", language="text")
-        st.markdown("Each line should be a valid WKT LINESTRING. Coordinates in any projected CRS.")
+        st.markdown("Each line is a valid WKT LINESTRING. Coordinates in any projected CRS.")
 
 
-def render_sidebar() -> Tuple[Optional[str], float, Optional[str]]:
+def render_sidebar() -> Tuple[Optional[str], float]:
     with st.sidebar:
         st.markdown("""
             <div style="text-align:center;padding:1rem 0;">
-                <div style="font-size:2.5rem;margin-bottom:0.4rem;">🛣️</div>
-                <h2 style="margin:0;font-weight:800;font-size:1.4rem;">Route QA System</h2>
-                <p style="margin:0.2rem 0 0;font-size:0.8rem;opacity:0.7;">v5.0 • FutureFormers</p>
+                <div style="font-size:2.5rem;margin-bottom:0.4rem;">🔍</div>
+                <h2 style="margin:0;font-weight:800;font-size:1.4rem;">Gap Detector</h2>
+                <p style="margin:0.2rem 0 0;font-size:0.8rem;opacity:0.7;">v6.0 • FutureFormers</p>
             </div>
         """, unsafe_allow_html=True)
 
         st.divider()
         st.markdown("### 📁 Data Input")
         uploaded = st.file_uploader("Upload .wkt / .txt", type=['wkt', 'txt'],
-            help="LINESTRING geometries", key="primary_upload")
-        use_demo = st.button("🎯 Load Demo Data", type="primary", use_container_width=True)
+            help="LINESTRING geometries")
+        use_demo = st.button("🎯 Load Demo Data (56 segs)", type="primary", use_container_width=True)
 
         st.divider()
-        st.markdown("### 🔄 Compare Networks")
-        compare_file = st.file_uploader("Upload old version for diff", type=['wkt', 'txt'],
-            help="Upload a previous version to compare against", key="compare_upload")
-
-        st.divider()
-        st.markdown("### ⚙️ ML Parameters")
+        st.markdown("### ⚙️ ML Sensitivity")
         contamination = st.slider("Anomaly Sensitivity", 0.05, 0.30, 0.15, 0.01,
-            help="Isolation Forest contamination — higher = flag more segments")
+            help="Higher = flag more segments as anomalous")
 
         st.divider()
-        st.markdown("### 💡 Detection Pipeline")
+        st.markdown("### 🔗 Error Type Focus")
         st.markdown("""
-        <div style="font-size:0.82rem;line-height:1.6;">
-            <p><b>A.</b> Feature Extraction</p>
-            <p><b>B.</b> Rule-Based Validation</p>
-            <p><b>C.</b> Geometry Quality Checks</p>
-            <p><b>D.</b> Isolation Forest ML</p>
-            <p><b>E.</b> Combined Decision Logic</p>
-            <p><b>F.</b> Auto-Fix Suggestions</p>
+        <div style="font-size:0.85rem;line-height:1.6;background:rgba(239,68,68,0.1);border-radius:12px;padding:0.75rem;">
+            <b style="color:#ef4444;">ENDPOINT GAP</b><br>
+            <span style="opacity:0.8;">Detects where road endpoints should connect but have coordinate gaps, breaking route continuity.</span>
         </div>
         """, unsafe_allow_html=True)
 
         st.divider()
         st.markdown("""
             <div style="text-align:center;font-size:0.72rem;opacity:0.6;">
-                FutureFormers • IIT Mandi Hackathon 3.0<br>Problem Statement 2<br>© 2026
+                FutureFormers • IIT Mandi Hackathon 3.0<br>
+                Axes Systems GmbH • Option B<br>© 2026
             </div>
         """, unsafe_allow_html=True)
 
     wkt_data = None
-    compare_data = None
     if use_demo:
         wkt_data = DEMO_WKT_DATA
         st.session_state['data_source'] = 'demo'
@@ -1238,10 +1137,7 @@ def render_sidebar() -> Tuple[Optional[str], float, Optional[str]]:
     elif st.session_state.get('data_source') == 'demo':
         wkt_data = DEMO_WKT_DATA
 
-    if compare_file is not None:
-        compare_data = compare_file.read().decode('utf-8')
-
-    return wkt_data, contamination, compare_data
+    return wkt_data, contamination
 
 
 # =============================================================================
@@ -1259,164 +1155,103 @@ def main():
 
     if 'data_source' not in st.session_state:
         st.session_state['data_source'] = None
-    if 'false_positives' not in st.session_state:
-        st.session_state['false_positives'] = set()
 
-    wkt_data, contamination, compare_data = render_sidebar()
+    wkt_data, contamination = render_sidebar()
     render_hero()
 
     if wkt_data:
-        with st.spinner("🔬 Running full QA pipeline..."):
+        with st.spinner("🔍 Scanning for endpoint gaps..."):
             # 1. Parse
             lines = parse_wkt(wkt_data)
             if not lines:
-                st.error("No valid LINESTRING geometries found in file.")
+                st.error("No valid LINESTRING geometries found.")
                 return
 
             # 2. Feature Extraction
             extractor = FeatureExtractor(lines, APP_CONFIG['precision'])
             features = extractor.extract_all()
 
-            # 3. Rule-Based Validation
-            validator = RuleBasedValidator()
-            rule_issues = validator.validate(features)
+            # 3. Gap Detection (rule-based)
+            gap_detector = GapDetector()
+            rule_issues = gap_detector.detect(features)
 
-            # 4. Geometry Quality Checks
-            geo_checker = GeometryChecker(lines, APP_CONFIG['precision'])
-            geo_issues = geo_checker.check_all()
+            # 4. ML Anomaly Detection
+            ml_detector = AnomalyDetector(contamination=contamination)
+            features, ml_issues = ml_detector.detect(features)
 
-            # 5. ML Anomaly Detection
-            detector = AnomalyDetector(contamination=contamination)
-            features, ml_issues = detector.detect(features)
+            # 5. Decision Logic
+            all_issues = DecisionEngine.combine(rule_issues, ml_issues)
 
-            # 6. Decision Logic (rule + geo + ML)
-            all_issues = DecisionEngine.combine(rule_issues + geo_issues, ml_issues)
-
-            # 7. Filter false positives
-            active_issues = [i for i in all_issues
-                if (i['geometry_id'], i['error_type']) not in st.session_state['false_positives']]
-
-            # 8. Auto-fix suggestions
+            # 6. Auto-fix suggestions
             fixer = AutoFixer(lines, APP_CONFIG['precision'])
-            fixes = fixer.suggest_fixes(active_issues)
+            fixes = fixer.suggest_fixes(all_issues)
 
-            # 9. Stats
-            stats = compute_stats(lines, features)
+            # 7. Stats & Report
+            stats = compute_stats(lines)
+            report = build_error_report(all_issues, fixes)
 
-            # 10. Build report
-            report = build_error_report(active_issues, fixes)
+        render_metrics(stats, all_issues)
 
-            # 11. Compare networks (if old version uploaded)
-            diff_result = None
-            if compare_data:
-                old_lines = parse_wkt(compare_data)
-                if old_lines:
-                    comparator = NetworkComparator(APP_CONFIG['precision'])
-                    diff_result = comparator.compare(old_lines, lines)
-
-        # --- Metrics Dashboard ---
-        render_metrics(stats, active_issues)
-
-        # --- Tabs ---
-        tab_names = [
-            "🗺️ Map View",
-            "📋 QA Report",
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "🗺️ Map",
+            "📋 Gap Report",
             "🔧 Auto-Fix",
-            "🧬 Features",
+            "🧪 Examples",
+            "📚 Training",
             "📊 Statistics",
-            "🔬 Pipeline",
-        ]
-        if diff_result:
-            tab_names.append("🔄 Network Diff")
-        tabs = st.tabs(tab_names)
+        ])
 
-        with tabs[0]:
+        with tab1:
             st.markdown("""
-                <div class="section-header"><span class="icon">🗺️</span><h3>Interactive Network Map</h3></div>
+                <div class="section-header"><span class="icon">🗺️</span><h3>Network Map — Gap Visualization</h3></div>
                 <p style="color:#64748b;margin-bottom:0.75rem;font-size:0.9rem;">
-                    Red/Orange segments are flagged • Click markers for details • Toggle layers top-right
+                    Red/Orange = gap segments • Click markers for gap details • Toggle layers top-right
                 </p>
             """, unsafe_allow_html=True)
             st.markdown('<div class="map-container">', unsafe_allow_html=True)
-            map_obj = create_map(lines, active_issues)
-            st_folium(map_obj, height=550, use_container_width=True)
+            st_folium(create_map(lines, all_issues), height=550, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with tabs[1]:
-            st.markdown("""<div class="section-header"><span class="icon">📋</span><h3>Detected Issues</h3></div>""", unsafe_allow_html=True)
-
-            # Feedback: mark false positives
-            if active_issues:
-                st.markdown("""<p style="color:#64748b;font-size:0.85rem;margin-bottom:0.5rem;">
-                    ✅ Mark false positives to exclude them from the report. State persists during session.
-                </p>""", unsafe_allow_html=True)
-                fp_options = [f"#{i['geometry_id']} {i['error_type']}" for i in active_issues]
-                selected_fps = st.multiselect("Mark as false positive:", fp_options,
-                    help="Select issues that are not real errors")
-                if selected_fps:
-                    for sel in selected_fps:
-                        parts = sel.split(" ", 1)
-                        gid = int(parts[0][1:])
-                        etype = parts[1]
-                        st.session_state['false_positives'].add((gid, etype))
-                    st.rerun()
-
-                if st.session_state['false_positives']:
-                    n_fp = len(st.session_state['false_positives'])
-                    col_fp1, col_fp2 = st.columns([3, 1])
-                    with col_fp1:
-                        st.info(f"🏷️ {n_fp} issue(s) marked as false positive and excluded from report.")
-                    with col_fp2:
-                        if st.button("🔄 Reset All", use_container_width=True):
-                            st.session_state['false_positives'] = set()
-                            st.rerun()
-
-            render_issue_table(active_issues)
-            if active_issues:
+        with tab2:
+            st.markdown("""<div class="section-header"><span class="icon">🔗</span><h3>Detected Endpoint Gaps</h3></div>""", unsafe_allow_html=True)
+            render_issue_table(all_issues)
+            if all_issues:
                 st.markdown("<br>", unsafe_allow_html=True)
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    csv_data = pd.DataFrame([{
-                        'Segment': i['geometry_id'], 'Type': i['error_type'],
-                        'Severity': i.get('severity',''), 'Confidence': i.get('confidence',0),
-                        'Source': i.get('confirmed_by',''), 'Description': i.get('description','')
-                    } for i in active_issues]).to_csv(index=False)
-                    st.download_button("📥 Download CSV", csv_data, "qa_error_report.csv", "text/csv", use_container_width=True)
+                    csv = pd.DataFrame([{
+                        'Segment': i['geometry_id'], 'Endpoint': i.get('endpoint',''),
+                        'Gap': i.get('gap_distance',0), 'Severity': i.get('severity',''),
+                        'Confidence': i.get('confidence',0), 'Source': i.get('confirmed_by',''),
+                        'Description': i.get('description','')
+                    } for i in all_issues]).to_csv(index=False)
+                    st.download_button("📥 CSV", csv, "gap_report.csv", "text/csv", use_container_width=True)
                 with col2:
-                    json_str = json.dumps(report, indent=2)
-                    st.download_button("📥 Download JSON", json_str, "error_report.json", "application/json", use_container_width=True)
+                    st.download_button("📥 JSON", json.dumps(report, indent=2),
+                        "error_report.json", "application/json", use_container_width=True)
                 with col3:
-                    pdf_bytes = generate_pdf_report(stats, active_issues, fixes)
-                    st.download_button("📥 Download Report (.txt)", pdf_bytes, "qa_report.txt", "text/plain", use_container_width=True)
+                    st.download_button("📥 Report (.txt)",
+                        generate_text_report(stats, all_issues, fixes),
+                        "gap_report.txt", "text/plain", use_container_width=True)
 
-        with tabs[2]:
-            st.markdown("""<div class="section-header"><span class="icon">🔧</span><h3>Auto-Fix Suggestions</h3></div>""", unsafe_allow_html=True)
+        with tab3:
+            st.markdown("""<div class="section-header"><span class="icon">🔧</span><h3>Auto-Fix — Snap Endpoints</h3></div>""", unsafe_allow_html=True)
             if fixes:
                 st.markdown("""<p style="color:#64748b;margin-bottom:0.75rem;font-size:0.9rem;">
-                    Suggested coordinate corrections to snap dangling endpoints to nearest roads.
+                    Suggested coordinate corrections to close detected gaps.
                 </p>""", unsafe_allow_html=True)
-                fix_rows = []
-                for f in fixes:
-                    fix_rows.append({
-                        'Seg #': f['geometry_id'],
-                        'Endpoint': f['endpoint'],
-                        'Original': f"({f['original_coord'][0]}, {f['original_coord'][1]})",
-                        'Suggested': f"({f['suggested_coord'][0]}, {f['suggested_coord'][1]})",
-                        'Snap To': f"Seg #{f['snap_to_segment']}",
-                        'Distance': f"{f['distance']:.4f}",
-                    })
-                fix_df = pd.DataFrame(fix_rows)
+                fix_df = pd.DataFrame([{
+                    'Seg #': f['geometry_id'],
+                    'Endpoint': f['endpoint'],
+                    'Original': f"({f['original_coord'][0]}, {f['original_coord'][1]})",
+                    'Fix To': f"({f['suggested_coord'][0]}, {f['suggested_coord'][1]})",
+                    'Snap To Seg': f"#{f['snap_to_segment']}",
+                    'Gap': f"{f['distance']:.4f}",
+                } for f in fixes])
                 fix_df.index = fix_df.index + 1
-                fix_df.index.name = '#'
-                st.dataframe(fix_df, use_container_width=True, height=350)
+                st.dataframe(fix_df, use_container_width=True, height=300)
 
-                # Generate corrected WKT
                 st.markdown("---")
-                st.markdown("##### 📄 Download Corrected WKT")
-                st.markdown("""<p style="color:#64748b;font-size:0.85rem;">
-                    Apply all suggested fixes and download the corrected network file.
-                </p>""", unsafe_allow_html=True)
-
                 corrected_lines = list(lines)
                 for fix in fixes:
                     gid = fix['geometry_id'] - 1
@@ -1428,8 +1263,7 @@ def main():
                     else:
                         coords[-1] = fix['suggested_coord']
                     corrected_lines[gid] = LineString(coords)
-
-                corrected_wkt = "\n".join(line.wkt for line in corrected_lines)
+                corrected_wkt = "\n".join(l.wkt for l in corrected_lines)
                 st.download_button("📥 Download Corrected .wkt", corrected_wkt,
                     "corrected_network.wkt", "text/plain", use_container_width=True)
             else:
@@ -1437,78 +1271,19 @@ def main():
                     <div style="text-align:center;padding:2.5rem;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));border-radius:16px;">
                         <div style="font-size:3.5rem;margin-bottom:0.75rem;">✅</div>
                         <h3 style="color:#059669;margin:0 0 0.4rem;font-weight:700;">No Fixes Needed</h3>
-                        <p style="color:#64748b;margin:0;">No endpoint gaps requiring auto-fix were detected.</p>
+                        <p style="color:#64748b;margin:0;">No endpoint gaps requiring correction.</p>
                     </div>
                 """, unsafe_allow_html=True)
 
-        with tabs[3]:
-            st.markdown("""<div class="section-header"><span class="icon">🧬</span><h3>Feature Matrix</h3></div>
-                <p style="color:#64748b;margin-bottom:0.75rem;font-size:0.9rem;">
-                    Extracted features per segment — ML Flag = 1 means Isolation Forest anomaly
-                </p>
-            """, unsafe_allow_html=True)
-            render_feature_table(features)
+        with tab4:
+            render_examples()
 
-        with tabs[4]:
+        with tab5:
+            render_training()
+
+        with tab6:
             st.markdown("""<div class="section-header"><span class="icon">📊</span><h3>Network Statistics</h3></div>""", unsafe_allow_html=True)
-            render_stats(stats, active_issues)
-
-        with tabs[5]:
-            st.markdown("""<div class="section-header"><span class="icon">🔬</span><h3>Detection Pipeline</h3></div>
-                <p style="color:#64748b;margin-bottom:0.75rem;font-size:0.9rem;">
-                    Six-stage pipeline: no hardcoded thresholds, no manual labeling, fully data-driven.
-                </p>
-            """, unsafe_allow_html=True)
-            render_pipeline_info()
-
-            st.markdown("---")
-            st.markdown("##### 📄 Full error_report.json Preview")
-            st.json(report)
-
-        # Network Diff tab (conditional)
-        if diff_result and len(tabs) > 6:
-            with tabs[6]:
-                st.markdown("""<div class="section-header"><span class="icon">🔄</span><h3>Network Comparison</h3></div>""", unsafe_allow_html=True)
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Old Segments", diff_result['old_count'])
-                with col2:
-                    st.metric("New Segments", diff_result['new_count'],
-                        delta=diff_result['new_count'] - diff_result['old_count'])
-                with col3:
-                    st.metric("Unchanged", diff_result['unchanged'])
-
-                st.markdown("<br>", unsafe_allow_html=True)
-                col4, col5 = st.columns(2)
-                with col4:
-                    st.markdown(f"""
-                        <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));
-                            border-radius:16px;padding:1.5rem;text-align:center;">
-                            <div style="font-size:2.5rem;margin-bottom:0.5rem;">➕</div>
-                            <div style="font-size:2rem;font-weight:800;color:#059669;">{diff_result['added']}</div>
-                            <div style="font-size:0.85rem;color:#64748b;font-weight:600;">Segments Added</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col5:
-                    st.markdown(f"""
-                        <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.1));
-                            border-radius:16px;padding:1.5rem;text-align:center;">
-                            <div style="font-size:2.5rem;margin-bottom:0.5rem;">➖</div>
-                            <div style="font-size:2rem;font-weight:800;color:#dc2626;">{diff_result['removed']}</div>
-                            <div style="font-size:0.85rem;color:#64748b;font-weight:600;">Segments Removed</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                if diff_result['added_lines'] or diff_result['removed_lines']:
-                    st.markdown("---")
-                    if diff_result['added_lines']:
-                        with st.expander(f"🟢 {len(diff_result['added_lines'])} Added Segments"):
-                            for i, line in enumerate(diff_result['added_lines'], 1):
-                                st.code(line.wkt, language="text")
-                    if diff_result['removed_lines']:
-                        with st.expander(f"🔴 {len(diff_result['removed_lines'])} Removed Segments"):
-                            for i, line in enumerate(diff_result['removed_lines'], 1):
-                                st.code(line.wkt, language="text")
+            render_stats(stats, all_issues)
 
     else:
         render_welcome()
