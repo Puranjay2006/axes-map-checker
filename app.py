@@ -999,6 +999,10 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
     all_coords = [norm(c[0], c[1]) for line in lines for c in line.coords]
     m.fit_bounds(all_coords, padding=[30, 30])
 
+    # Inject DM Sans font into folium map so popups use it
+    font_link = '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'
+    m.get_root().header.add_child(folium.Element(font_link))
+
     # Add hover highlight/thicken effect for all polylines via JavaScript
     hover_js = """
     <script>
