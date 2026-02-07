@@ -242,7 +242,8 @@ CUSTOM_CSS = """
     .section-header .icon { font-size:1.5rem; }
 
     .map-container { border-radius:20px; overflow:hidden; box-shadow:var(--shadow-lg); border:3px solid rgba(255,255,255,0.5); }
-    .stDataFrame { border-radius:16px; overflow:hidden; box-shadow:0 4px 6px -1px rgb(0 0 0/0.1); }
+    .stDataFrame { border-radius:16px; overflow-x:auto; box-shadow:0 4px 6px -1px rgb(0 0 0/0.1); }
+    .stDataFrame [data-testid="stDataFrameResizable"] { min-width:800px; }
 
     .stButton button {
         background: linear-gradient(135deg, var(--primary), var(--primary-dark));
@@ -1069,8 +1070,10 @@ def render_issue_table(issues: List[Dict]):
     col_config = {
         'Description': st.column_config.TextColumn('Description', width='large'),
     }
+    st.markdown("""<div style="overflow-x:auto;max-width:100%;">""", unsafe_allow_html=True)
     st.dataframe(df.style.map(style_sev, subset=['Severity']),
                  use_container_width=True, height=420, column_config=col_config)
+    st.markdown("""</div>""", unsafe_allow_html=True)
 
 
 def render_stats(stats: Dict, issues: List[Dict]):
