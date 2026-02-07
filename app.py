@@ -909,8 +909,9 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
     def norm(x, y):
         return [(y - cy) * scale, (x - cx) * scale]
 
-    m = folium.Map(location=[0, 0], zoom_start=15, tiles='cartodbdark_matter')
-    folium.TileLayer('cartodbpositron', name='Light').add_to(m)
+    m = folium.Map(location=[0, 0], zoom_start=15, tiles=None)
+    folium.TileLayer('cartodbdark_matter', name='Dark Mode').add_to(m)
+    folium.TileLayer('cartodbpositron', name='Light Mode').add_to(m)
 
     flagged_ids = set(i['geometry_id'] for i in issues)
     severity_map = {}
@@ -996,7 +997,7 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
 
     folium.LayerControl(collapsed=False).add_to(m)
     all_coords = [norm(c[0], c[1]) for line in lines for c in line.coords]
-    m.fit_bounds(all_coords)
+    m.fit_bounds(all_coords, padding=[30, 30])
 
     # Add hover highlight/thicken effect for all polylines via JavaScript
     hover_js = """
@@ -1801,13 +1802,14 @@ def main():
 
         render_metrics(stats, all_issues)
 
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "🗺️ Map",
             "📋 Gap Report",
             "🔧 Auto-Fix",
             "🧪 Examples",
             "📚 Training",
             "📊 Statistics",
+            "⚙️ How It Works",
         ])
 
         with tab1:
@@ -1828,11 +1830,11 @@ def main():
                     <div class="legend-grid">
                         <div class="legend-item">
                             <div class="legend-swatch" style="background:#1a1a2e;"></div>
-                            <div class="legend-label"><b>cartodbdarkmatter</b> — Dark base map theme for better contrast with colored road segments</div>
+                            <div class="legend-label"><b>Dark Mode</b> — Dark base map theme for better contrast with colored road segments</div>
                         </div>
                         <div class="legend-item">
                             <div class="legend-swatch" style="background:#f5f5f5;border:1px solid #ccc;"></div>
-                            <div class="legend-label"><b>Light</b> — Light/minimal base map theme, easier on the eyes for detailed inspection</div>
+                            <div class="legend-label"><b>Light Mode</b> — Light/minimal base map theme, easier on the eyes for detailed inspection</div>
                         </div>
                         <div class="legend-item">
                             <div class="legend-swatch" style="background:#60a5fa;"></div>
@@ -1950,9 +1952,12 @@ def main():
                     else:
                         st.dataframe(feat_display, use_container_width=True, height=400)
 
-        # Show info sections below analysis
-        st.markdown("<br>", unsafe_allow_html=True)
-        render_info_sections()
+        with tab7:
+            st.markdown("""<div class="section-header"><span class="icon">⚙️</span><h3>How It Works</h3></div>""", unsafe_allow_html=True)
+            render_info_sections()
+
+        # Tutorial stays visible below analysis tabs
+        render_onboarding()
 
     else:
         render_welcome()
