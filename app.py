@@ -403,10 +403,12 @@ CUSTOM_CSS = """
     /* Force ALL text in main content area to be dark — override any inherited light colors */
     .main * { color: var(--gray-800) !important; }
     .main [data-testid="stExpander"] {
-        background: rgba(255,255,255,0.92) !important; backdrop-filter: blur(16px) !important;
-        border: 1px solid rgba(255,255,255,0.5) !important; border-radius: 20px !important;
+        background: white !important;
+        border: 1px solid rgba(99,102,241,0.15) !important; border-radius: 20px !important;
         box-shadow: var(--shadow-lg) !important; overflow: hidden !important;
+        padding: 0.25rem !important;
     }
+    .main [data-testid="stExpander"] summary { background: white !important; border-radius: 16px !important; padding: 0.75rem 1rem !important; }
     .main [data-testid="stExpander"] summary,
     .main [data-testid="stExpander"] summary *,
     .main [data-testid="stExpander"] details * { color: var(--gray-800) !important; }
