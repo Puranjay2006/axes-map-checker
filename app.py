@@ -214,6 +214,11 @@ CUSTOM_CSS = """
     .metric-card.red::before { background: linear-gradient(90deg,#ef4444,#f87171); }
     .metric-card.green::before { background: linear-gradient(90deg,#10b981,#34d399); }
     .metric-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 20px 40px -12px rgba(0,0,0,0.2); }
+    .metric-card { animation: fadeInUp 0.5s ease-out both; }
+    .metric-card:nth-child(1) { animation-delay: 0.05s; }
+    .metric-card:nth-child(2) { animation-delay: 0.1s; }
+    .metric-card:nth-child(3) { animation-delay: 0.15s; }
+    .metric-card:nth-child(4) { animation-delay: 0.2s; }
     .metric-icon { font-size: 1.75rem; margin-bottom: 0.3rem; }
     .metric-value { font-size: 2.2rem; font-weight: 800; color: var(--gray-900); line-height: 1; margin-bottom: 0.15rem; }
     .metric-label { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -224,12 +229,13 @@ CUSTOM_CSS = """
     }
     .stTabs [data-baseweb="tab"] {
         background: transparent; border-radius: 12px; padding: 0.65rem 1.25rem;
-        font-weight: 600; color: var(--gray-600); transition: all 0.2s ease;
+        font-weight: 600; color: var(--gray-600); transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
     }
-    .stTabs [data-baseweb="tab"]:hover { background: rgba(99,102,241,0.1); color: var(--primary); }
+    .stTabs [data-baseweb="tab"]:hover { background: rgba(99,102,241,0.1); color: var(--primary); transform: translateY(-1px); }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
         color: white !important; box-shadow: 0 4px 14px 0 rgba(99,102,241,0.4);
+        transform: translateY(-2px);
     }
     .stTabs [data-baseweb="tab-panel"] {
         background: rgba(255,255,255,0.87); backdrop-filter: blur(16px);
@@ -245,17 +251,47 @@ CUSTOM_CSS = """
     .stDataFrame { border-radius:16px; overflow-x:auto; box-shadow:0 4px 6px -1px rgb(0 0 0/0.1); }
     .stDataFrame [data-testid="stDataFrameResizable"] { min-width:800px; }
 
+    /* Smooth fade-in animation for all content */
+    @keyframes fadeInUp { 0% { opacity:0; transform:translateY(20px); } 100% { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn { 0% { opacity:0; } 100% { opacity:1; } }
+    @keyframes scaleIn { 0% { opacity:0; transform:scale(0.95); } 100% { opacity:1; transform:scale(1); } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+    .hero-container { animation: fadeInUp 0.6s ease-out; }
+    .metric-grid { animation: fadeInUp 0.6s ease-out 0.1s both; }
+    .stTabs { animation: fadeInUp 0.6s ease-out 0.2s both; }
+    .welcome-card { animation: scaleIn 0.5s ease-out; }
+    .how-it-works { animation: fadeInUp 0.7s ease-out 0.15s both; }
+    .legend-box { animation: fadeIn 0.5s ease-out 0.3s both; }
+    .onboarding-overlay { animation: scaleIn 0.4s ease-out; }
+    .example-card { animation: fadeInUp 0.4s ease-out; }
+    .quality-score { animation: scaleIn 0.5s ease-out; }
+
     .stButton button {
         background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         color: white; border: none; border-radius: 12px; padding: 0.7rem 1.4rem;
-        font-weight: 600; font-size: 0.9rem; transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        font-weight: 600; font-size: 0.9rem;
+        transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
         box-shadow: 0 4px 14px 0 rgba(99,102,241,0.4);
-        white-space: nowrap;
+        white-space: nowrap; position: relative; overflow: hidden;
     }
-    .stButton button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px 0 rgba(99,102,241,0.5); }
+    .stButton button::after {
+        content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.5s ease;
+    }
+    .stButton button:hover::after { left: 100%; }
+    .stButton button:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 8px 25px 0 rgba(99,102,241,0.5);
+    }
+    .stButton button:active { transform: translateY(-1px) scale(0.98); transition: all 0.1s; }
     .stDownloadButton button {
         background: linear-gradient(135deg, #10b981, #059669);
         box-shadow: 0 4px 14px 0 rgba(16,185,129,0.4);
+    }
+    .stDownloadButton button:hover {
+        box-shadow: 0 8px 25px 0 rgba(16,185,129,0.5);
     }
 
     [data-testid="stFileUploader"] {
@@ -288,6 +324,11 @@ CUSTOM_CSS = """
         border-radius:14px; transition:all 0.2s ease;
     }
     .step-item:hover { transform:translateX(8px); background:linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15)); }
+    .step-item { animation: fadeInUp 0.4s ease-out both; }
+    .step-item:nth-child(1) { animation-delay: 0.1s; }
+    .step-item:nth-child(2) { animation-delay: 0.2s; }
+    .step-item:nth-child(3) { animation-delay: 0.3s; }
+    .step-item:nth-child(4) { animation-delay: 0.4s; }
     .step-number {
         width:30px; height:30px; background:linear-gradient(135deg, var(--primary), var(--primary-dark));
         color:white; border-radius:10px; display:flex; align-items:center; justify-content:center;
@@ -345,8 +386,13 @@ CUSTOM_CSS = """
     .pipeline-steps { display: flex; flex-direction: column; gap: 0; max-width: 700px; margin: 0 auto; }
     .pipe-step {
         display: flex; gap: 1.25rem; align-items: flex-start; position: relative;
-        padding: 1.25rem 0;
+        padding: 1.25rem 0; animation: fadeInUp 0.5s ease-out both;
     }
+    .pipe-step:nth-child(1) { animation-delay: 0.1s; }
+    .pipe-step:nth-child(2) { animation-delay: 0.2s; }
+    .pipe-step:nth-child(3) { animation-delay: 0.3s; }
+    .pipe-step:nth-child(4) { animation-delay: 0.4s; }
+    .pipe-step:nth-child(5) { animation-delay: 0.5s; }
     .pipe-step:not(:last-child)::after {
         content: ''; position: absolute; left: 24px; top: 60px; bottom: 0;
         width: 3px; background: linear-gradient(180deg, var(--primary-light), rgba(99,102,241,0.15));
@@ -1409,7 +1455,13 @@ def render_welcome():
         </div>
     """, unsafe_allow_html=True)
 
-    # Supported format — pure HTML instead of st.expander to avoid styling issues
+    render_info_sections()
+    render_onboarding()
+
+
+def render_info_sections():
+    """Supported format card + How It Works pipeline — shown on welcome page and below analysis."""
+    # Supported format
     st.markdown("""
         <div style="background:white;border-radius:20px;padding:1.5rem 2rem;margin-top:1.25rem;
                     border:1px solid rgba(99,102,241,0.12);box-shadow:0 4px 12px rgba(0,0,0,0.06);">
@@ -1422,7 +1474,7 @@ def render_welcome():
         </div>
     """, unsafe_allow_html=True)
 
-    # ---- HOW IT WORKS ----
+    # How It Works pipeline
     st.markdown("""
         <div class="how-it-works">
             <h2 class="hiw-title">⚙️ How It Works</h2>
@@ -1471,9 +1523,6 @@ def render_welcome():
             </div>
         </div>
     """, unsafe_allow_html=True)
-
-    # ---- INTERACTIVE ONBOARDING TUTORIAL ----
-    render_onboarding()
 
 
 def render_onboarding():
@@ -1623,8 +1672,9 @@ def render_sidebar() -> Tuple[Optional[str], float]:
 
         st.divider()
         st.markdown("### 📁 Data Input")
+        uploader_key = st.session_state.get('uploader_key', 0)
         uploaded = st.file_uploader("Upload .wkt / .txt", type=['wkt', 'txt'],
-            help="LINESTRING geometries")
+            help="LINESTRING geometries", key=f"file_uploader_{uploader_key}")
         use_demo = st.button("🎯 Load Demo Data (56 segs)", type="primary", use_container_width=True)
         if uploaded is not None or st.session_state.get('data_source'):
             if st.button("🔄 Clear Loaded Data", use_container_width=True):
@@ -1633,6 +1683,7 @@ def render_sidebar() -> Tuple[Optional[str], float]:
                         del st.session_state[key]
                 st.session_state['data_source'] = None
                 st.session_state['uploaded_wkt'] = None
+                st.session_state['uploader_key'] = uploader_key + 1
                 st.rerun()
 
         st.divider()
@@ -1886,6 +1937,10 @@ def main():
                                      use_container_width=True, height=400)
                     else:
                         st.dataframe(feat_display, use_container_width=True, height=400)
+
+        # Show info sections below analysis
+        st.markdown("<br>", unsafe_allow_html=True)
+        render_info_sections()
 
     else:
         render_welcome()
