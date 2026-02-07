@@ -1001,7 +1001,7 @@ def render_issue_table(issues: List[Dict]):
             'Severity': i.get('severity', 'MEDIUM'),
             'Confidence': f"{i.get('confidence', 0):.0%}",
             'Source': i.get('confirmed_by', i.get('source', '')),
-            'Description': i.get('description', '')[:120],
+            'Description': i.get('description', ''),
         })
     df = pd.DataFrame(rows)
     df.index = df.index + 1
@@ -1039,8 +1039,8 @@ def render_stats(stats: Dict, issues: List[Dict]):
     ), unsafe_allow_html=True)
 
     if stats['total_segments'] > 0:
-        error_rate = len(issues) / stats['total_segments'] * 100
-        quality = max(0, 100 - error_rate * 10)
+        affected = len(set(i['geometry_id'] for i in issues))
+        quality = max(0, (1 - affected / stats['total_segments']) * 100)
         sc = "excellent" if quality >= 85 else "good" if quality >= 60 else "poor"
         sl = "Excellent" if quality >= 85 else "Good" if quality >= 60 else "Needs Attention"
         se = "🌟" if quality >= 85 else "👍" if quality >= 60 else "🔧"
@@ -1662,28 +1662,32 @@ def main():
             st.markdown("""<div class="section-header"><span class="icon">📊</span><h3>Network Statistics</h3></div>""", unsafe_allow_html=True)
             render_stats(stats, all_issues)
 
-            with st.expander("📊 View Extracted Feature Data"):
-                st.markdown("""<p style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem;">
-                    Per-segment features used by the rule engine and ML model. Scroll right to see all columns.
-                </p>""", unsafe_allow_html=True)
-                display_cols = ['geometry_id', 'length', 'n_vertices', 'vertex_density',
-                                'start_degree', 'end_degree', 'connectivity_score',
-                                'min_gap_start', 'min_gap_end']
-                if 'ml_anomaly' in features.columns:
-                    display_cols += ['ml_anomaly', 'ml_score']
-                feat_display = features[display_cols].copy()
-                feat_display.index = feat_display.index + 1
+            with st.container():
+                if st.button("📊 View Extracted Feature Data", key="toggle_feat_data", use_container_width=True):
+                    st.session_state['show_feat_data'] = not st.session_state.get('show_feat_data', False)
 
-                def highlight_anomaly(val):
-                    if val == 1:
-                        return 'background:#fef2f2;color:#991b1b;font-weight:600;'
-                    return ''
+                if st.session_state.get('show_feat_data', False):
+                    st.markdown("""<p style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem;">
+                        Per-segment features used by the rule engine and ML model. Scroll right to see all columns.
+                    </p>""", unsafe_allow_html=True)
+                    display_cols = ['geometry_id', 'length', 'n_vertices', 'vertex_density',
+                                    'start_degree', 'end_degree', 'connectivity_score',
+                                    'min_gap_start', 'min_gap_end']
+                    if 'ml_anomaly' in features.columns:
+                        display_cols += ['ml_anomaly', 'ml_score']
+                    feat_display = features[display_cols].copy()
+                    feat_display.index = feat_display.index + 1
 
-                if 'ml_anomaly' in feat_display.columns:
-                    st.dataframe(feat_display.style.map(highlight_anomaly, subset=['ml_anomaly']),
-                                 use_container_width=True, height=400)
-                else:
-                    st.dataframe(feat_display, use_container_width=True, height=400)
+                    def highlight_anomaly(val):
+                        if val == 1:
+                            return 'background:#fef2f2;color:#991b1b;font-weight:600;'
+                        return ''
+
+                    if 'ml_anomaly' in feat_display.columns:
+                        st.dataframe(feat_display.style.map(highlight_anomaly, subset=['ml_anomaly']),
+                                     use_container_width=True, height=400)
+                    else:
+                        st.dataframe(feat_display, use_container_width=True, height=400)
 
     else:
         render_welcome()
