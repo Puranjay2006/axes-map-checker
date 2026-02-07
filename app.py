@@ -10,7 +10,7 @@ to find, visualize, and auto-fix broken connections.
 
 Team: FutureFormers | IIT Mandi Hackathon 3.0 | Problem Statement 2
 Company: Axes Systems GmbH | Option B: Rule-Based Geometry Validation
-Version: 6.0.0
+Version: 6.2.0
 """
 
 import streamlit as st
@@ -18,7 +18,6 @@ import pandas as pd
 import numpy as np
 import folium
 import json
-import io
 from datetime import datetime
 from streamlit_folium import st_folium
 from shapely import wkt
@@ -35,7 +34,7 @@ from sklearn.preprocessing import StandardScaler
 
 APP_CONFIG = {
     "title": "Route Continuity Gap Detector",
-    "version": "6.0.0",
+    "version": "6.2.0",
     "icon": "🔍",
     "precision": 6,
     "team": "FutureFormers",
@@ -858,7 +857,7 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
                         <p style="margin:0;color:#92400e;font-size:0.8rem;font-weight:600;">⚠️ Why is this an error?</p>
                         <p style="margin:4px 0 0;color:#78350f;font-size:0.78rem;line-height:1.4;">{why_text}</p>
                     </div></div>""", max_width=320),
-                tooltip=f"#{issue['geometry_id']} Gap ({sev}) — hover for details"
+                tooltip=f"#{issue['geometry_id']} Gap ({sev}) — click for details"
             ).add_to(marker_group)
         marker_group.add_to(m)
 
@@ -942,7 +941,7 @@ def render_issue_table(issues: List[Dict]):
             'Severity': i.get('severity', 'MEDIUM'),
             'Confidence': f"{i.get('confidence', 0):.0%}",
             'Source': i.get('confirmed_by', i.get('source', '')),
-            'Description': i.get('description', '')[:70],
+            'Description': i.get('description', '')[:120],
         })
     df = pd.DataFrame(rows)
     df.index = df.index + 1
@@ -1339,11 +1338,11 @@ def render_onboarding():
 
 def render_sidebar() -> Tuple[Optional[str], float]:
     with st.sidebar:
-        st.markdown("""
+        st.markdown(f"""
             <div style="text-align:center;padding:1rem 0;">
                 <div style="font-size:2.5rem;margin-bottom:0.4rem;">🔍</div>
                 <h2 style="margin:0;font-weight:800;font-size:1.4rem;">Gap Detector</h2>
-                <p style="margin:0.2rem 0 0;font-size:0.8rem;opacity:0.7;">v6.0 • FutureFormers</p>
+                <p style="margin:0.2rem 0 0;font-size:0.8rem;opacity:0.7;">v{APP_CONFIG['version']} • {APP_CONFIG['team']}</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -1352,6 +1351,14 @@ def render_sidebar() -> Tuple[Optional[str], float]:
         uploaded = st.file_uploader("Upload .wkt / .txt", type=['wkt', 'txt'],
             help="LINESTRING geometries")
         use_demo = st.button("🎯 Load Demo Data (56 segs)", type="primary", use_container_width=True)
+        if st.session_state.get('data_source'):
+            if st.button("🔄 Clear Loaded Data", use_container_width=True):
+                for key in list(st.session_state.keys()):
+                    if key.startswith('example_result_'):
+                        del st.session_state[key]
+                st.session_state['data_source'] = None
+                st.session_state['uploaded_wkt'] = None
+                st.rerun()
 
         st.divider()
         st.markdown("### ⚙️ ML Sensitivity")
@@ -1371,7 +1378,7 @@ def render_sidebar() -> Tuple[Optional[str], float]:
         st.markdown("""
             <div style="text-align:center;font-size:0.72rem;opacity:0.6;">
                 FutureFormers • IIT Mandi Hackathon 3.0<br>
-                Axes Systems GmbH • Option B<br>© 2026
+                Axes Systems GmbH • Option B<br>© 2025
             </div>
         """, unsafe_allow_html=True)
 
@@ -1379,11 +1386,15 @@ def render_sidebar() -> Tuple[Optional[str], float]:
     if use_demo:
         wkt_data = DEMO_WKT_DATA
         st.session_state['data_source'] = 'demo'
+        st.session_state['uploaded_wkt'] = None
     elif uploaded is not None:
         wkt_data = uploaded.read().decode('utf-8')
         st.session_state['data_source'] = 'upload'
+        st.session_state['uploaded_wkt'] = wkt_data
     elif st.session_state.get('data_source') == 'demo':
         wkt_data = DEMO_WKT_DATA
+    elif st.session_state.get('data_source') == 'upload' and st.session_state.get('uploaded_wkt'):
+        wkt_data = st.session_state['uploaded_wkt']
 
     return wkt_data, contamination
 
@@ -1408,13 +1419,24 @@ def main():
     render_hero()
 
     if wkt_data:
-        with st.spinner("🔍 Scanning for endpoint gaps..."):
-            # 1. Parse
-            lines = parse_wkt(wkt_data)
-            if not lines:
-                st.error("No valid LINESTRING geometries found.")
-                return
+        # 1. Parse
+        lines = parse_wkt(wkt_data)
+        if not lines:
+            st.error("No valid LINESTRING geometries found in the uploaded file.")
+            return
 
+        # Data source badge
+        source = st.session_state.get('data_source', '')
+        if source == 'demo':
+            st.markdown(f"""<div style="text-align:center;margin-bottom:1rem;">
+                <span style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;padding:0.35rem 1.2rem;border-radius:100px;font-size:0.82rem;font-weight:600;letter-spacing:0.02em;">
+                📁 Demo Dataset — {len(lines)} Street Segments</span></div>""", unsafe_allow_html=True)
+        elif source == 'upload':
+            st.markdown(f"""<div style="text-align:center;margin-bottom:1rem;">
+                <span style="background:linear-gradient(135deg,#10b981,#059669);color:white;padding:0.35rem 1.2rem;border-radius:100px;font-size:0.82rem;font-weight:600;letter-spacing:0.02em;">
+                📄 Uploaded File — {len(lines)} Segments Parsed</span></div>""", unsafe_allow_html=True)
+
+        with st.spinner(f"🔍 Analyzing {len(lines)} segments for endpoint gaps..."):
             # 2. Feature Extraction
             extractor = FeatureExtractor(lines, APP_CONFIG['precision'])
             features = extractor.extract_all()
@@ -1457,7 +1479,7 @@ def main():
                 </p>
             """, unsafe_allow_html=True)
             st.markdown('<div class="map-container">', unsafe_allow_html=True)
-            st_folium(create_map(lines, all_issues), height=550, use_container_width=True)
+            st_folium(create_map(lines, all_issues), height=550, use_container_width=True, returned_objects=[])
             st.markdown('</div>', unsafe_allow_html=True)
 
             # Map layer legend / explanation
@@ -1561,6 +1583,29 @@ def main():
         with tab6:
             st.markdown("""<div class="section-header"><span class="icon">📊</span><h3>Network Statistics</h3></div>""", unsafe_allow_html=True)
             render_stats(stats, all_issues)
+
+            with st.expander("📊 View Extracted Feature Data"):
+                st.markdown("""<p style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem;">
+                    Per-segment features used by the rule engine and ML model. Scroll right to see all columns.
+                </p>""", unsafe_allow_html=True)
+                display_cols = ['geometry_id', 'length', 'n_vertices', 'vertex_density',
+                                'start_degree', 'end_degree', 'connectivity_score',
+                                'min_gap_start', 'min_gap_end']
+                if 'ml_anomaly' in features.columns:
+                    display_cols += ['ml_anomaly', 'ml_score']
+                feat_display = features[display_cols].copy()
+                feat_display.index = feat_display.index + 1
+
+                def highlight_anomaly(val):
+                    if val == 1:
+                        return 'background:#fef2f2;color:#991b1b;font-weight:600;'
+                    return ''
+
+                if 'ml_anomaly' in feat_display.columns:
+                    st.dataframe(feat_display.style.map(highlight_anomaly, subset=['ml_anomaly']),
+                                 use_container_width=True, height=400)
+                else:
+                    st.dataframe(feat_display, use_container_width=True, height=400)
 
     else:
         render_welcome()
