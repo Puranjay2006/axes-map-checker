@@ -34,7 +34,7 @@ from sklearn.preprocessing import StandardScaler
 
 APP_CONFIG = {
     "title": "Route Continuity Gap Detector",
-    "version": "6.2.0",
+    "version": "6.3.0",
     "icon": "🔍",
     "precision": 6,
     "team": "FutureFormers",
@@ -532,15 +532,26 @@ class GapDetector:
     def detect(self, features: pd.DataFrame) -> List[Dict]:
         issues: List[Dict] = []
 
-        # Compute adaptive gap threshold from dangling endpoints
-        dangling_mask = (features['start_degree'] == 1) | (features['end_degree'] == 1)
-        gap_values = features.loc[dangling_mask, 'connectivity_score']
-        positive_gaps = gap_values[gap_values > 0]
+        # Compute adaptive gap threshold using TWO signals:
+        # 1. Data-driven: 75th percentile of dangling endpoint gaps (captures most gaps)
+        # 2. Scale-aware: cap at 15% of average segment length (prevents dead-end FPs)
+        # The minimum of both ensures near-miss gaps are caught without
+        # flagging legitimate dead-end road terminals.
+        dangling_start_gaps = features.loc[features['start_degree'] == 1, 'min_gap_start']
+        dangling_end_gaps = features.loc[features['end_degree'] == 1, 'min_gap_end']
+        all_dangling_gaps = pd.concat([dangling_start_gaps, dangling_end_gaps])
+        positive_gaps = all_dangling_gaps[(all_dangling_gaps > 0) & np.isfinite(all_dangling_gaps)]
 
-        if len(positive_gaps) > 0:
-            gap_threshold = np.percentile(positive_gaps, 50)
+        avg_length = float(features['length'].mean()) if len(features) > 0 else 0
+        scale_threshold = avg_length * 0.15 if avg_length > 0 else 5.0
+
+        if len(positive_gaps) >= 4:
+            data_threshold = float(np.percentile(positive_gaps, 75))
+            gap_threshold = min(data_threshold, scale_threshold)
+        elif len(positive_gaps) >= 1:
+            gap_threshold = scale_threshold
         else:
-            gap_threshold = 5.0
+            gap_threshold = scale_threshold
 
         for _, row in features.iterrows():
             gid = int(row['geometry_id'])
@@ -602,22 +613,35 @@ class AnomalyDetector:
         self.scaler = StandardScaler()
 
     def detect(self, features: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dict]]:
+        features = features.copy()
+
+        # Guard: need enough samples for meaningful anomaly detection
+        if len(features) < 5:
+            features['ml_anomaly'] = 0
+            features['ml_score'] = 0.0
+            return features, []
+
         feat_cols = ['length', 'n_vertices', 'vertex_density', 'connectivity_score',
                      'start_degree', 'end_degree', 'min_gap_start', 'min_gap_end']
         X = features[feat_cols].copy()
         X = X.replace([np.inf, -np.inf], 999999)
         X_scaled = self.scaler.fit_transform(X.values)
 
-        model = IsolationForest(contamination=self.contamination, n_estimators=100, random_state=42)
+        # Adjust contamination if dataset is small — avoid flagging too many
+        effective_contamination = min(self.contamination, max(0.05, 1.0 / len(features)))
+        model = IsolationForest(contamination=effective_contamination, n_estimators=100, random_state=42)
         preds = model.fit_predict(X_scaled)
         scores = model.decision_function(X_scaled)
 
-        features = features.copy()
         features['ml_anomaly'] = (preds == -1).astype(int)
         features['ml_score'] = np.round(-scores, 4)
 
         issues: List[Dict] = []
         for _, row in features[features['ml_anomaly'] == 1].iterrows():
+            # Use the max of endpoint gaps (the more problematic endpoint)
+            gap_dist = float(max(row['min_gap_start'], row['min_gap_end']))
+            if np.isinf(gap_dist):
+                gap_dist = float(row['connectivity_score']) if np.isfinite(row['connectivity_score']) else 0.0
             issues.append({
                 'geometry_id': int(row['geometry_id']),
                 'error_type': 'ENDPOINT_GAP',
@@ -627,7 +651,7 @@ class AnomalyDetector:
                     f"anomalous connectivity (score: {row['ml_score']:.4f}). "
                     f"Potential hidden gap or unusual endpoint pattern."
                 ),
-                'gap_distance': float(row['connectivity_score']),
+                'gap_distance': gap_dist,
                 'location': (row['start_x'], row['start_y']),
                 'start': (row['start_x'], row['start_y']),
                 'end': (row['end_x'], row['end_y']),
