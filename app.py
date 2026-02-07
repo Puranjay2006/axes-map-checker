@@ -1066,7 +1066,11 @@ def render_issue_table(issues: List[Dict]):
         elif val == 'MEDIUM': return 'background:#fffbeb;color:#92400e;font-weight:600;'
         return 'background:#f0f9ff;color:#1e40af;font-weight:600;'
 
-    st.dataframe(df.style.map(style_sev, subset=['Severity']), use_container_width=True, height=420)
+    col_config = {
+        'Description': st.column_config.TextColumn('Description', width='large'),
+    }
+    st.dataframe(df.style.map(style_sev, subset=['Severity']),
+                 use_container_width=True, height=420, column_config=col_config)
 
 
 def render_stats(stats: Dict, issues: List[Dict]):
@@ -1560,23 +1564,23 @@ def render_onboarding():
                 '</div>'
             )
 
-        st.markdown(f"""
-            <div class="onboarding-overlay">
-                <div class="onboarding-step-badge">Step {step + 1} of {total}</div>
-                <div style="display:flex;align-items:center;gap:0.75rem;margin:0.75rem 0 0.5rem;">
-                    <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,{s['color']},{s['color']}cc);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">{s['icon']}</div>
-                    <h3 style="margin:0;font-size:1.15rem;font-weight:700;color:#1e293b;">{s['title']}</h3>
-                </div>
-                <p style="color:#475569;font-size:0.9rem;line-height:1.6;margin:0 0 0.75rem;">{s['desc']}</p>
-                {tip_html}
-                <div style="margin-top:1rem;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
-                    <div style="width:{pct}%;height:100%;background:linear-gradient(90deg,{s['color']},{s['color']}cc);border-radius:3px;transition:width 0.3s;"></div>
-                </div>
-                <div style="display:flex;justify-content:center;gap:8px;margin-top:0.6rem;">
-                    {dots_html}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        # Build the full HTML as a regular string to avoid f-string/markdown truncation
+        card_html = (
+            '<div class="onboarding-overlay">'
+            f'<div class="onboarding-step-badge">Step {step + 1} of {total}</div>'
+            f'<div style="display:flex;align-items:center;gap:0.75rem;margin:0.75rem 0 0.5rem;">'
+            f'<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,{s["color"]},{s["color"]}cc);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">{s["icon"]}</div>'
+            f'<h3 style="margin:0;font-size:1.15rem;font-weight:700;color:#1e293b;">{s["title"]}</h3>'
+            '</div>'
+            f'<p style="color:#475569;font-size:0.9rem;line-height:1.6;margin:0 0 0.75rem;">{s["desc"]}</p>'
+            + tip_html +
+            f'<div style="margin-top:1rem;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">'
+            f'<div style="width:{pct}%;height:100%;background:linear-gradient(90deg,{s["color"]},{s["color"]}cc);border-radius:3px;transition:width 0.3s;"></div>'
+            '</div>'
+            f'<div style="display:flex;justify-content:center;gap:8px;margin-top:0.6rem;">{dots_html}</div>'
+            '</div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
