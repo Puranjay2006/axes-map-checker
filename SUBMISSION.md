@@ -8,7 +8,7 @@
 |-------|---------|
 | **Team Name** | FutureFormers |
 | **Problem Statement Chosen** | Problem 2 |
-| **Team Members** | Puranjay (Developer, UI/UX) • Akshobhya (System Design, QA Logic) |
+| **Team Members** | Puranjay Gambhir (puranjay.gambhir@gmail.com) • Akshobhya Rao (akshobhyaraoap1845@gmail.com) • Rohan (snocky770@gmail.com) |
 | **GitHub Repository Link** | https://github.com/Puranjay2006/axes-map-checker |
 | **Demo Link** | https://axes-map-checker.streamlit.app |
 
@@ -31,8 +31,8 @@ When map vendors supply road network data as WKT LINESTRING geometries, a common
 - **Single error type focus:** We detect only endpoint gaps (broken route continuity). Other error types like self-intersections, attribute errors, or topology violations are out of scope.
 - **Coordinate system agnostic:** All coordinates in a single file share the same projected CRS. No CRS transformations are performed.
 - **2D only:** Z-coordinates are ignored if present.
-- **No manual labeling required:** All thresholds are derived from the dataset's own statistical distribution (percentile-based), making the system work on any dataset without tuning.
-- **Adaptive thresholds:** The gap detection threshold is computed from the dataset itself (median of dangling-endpoint distances), not hardcoded.
+- **No manual labeling required:** All thresholds are derived from the dataset's own statistical distribution, making the system work on any dataset without tuning.
+- **Adaptive thresholds:** The gap detection threshold uses a dual-signal approach: the 75th percentile of dangling-endpoint gaps combined with a scale-aware cap (15% of average segment length), preventing false positives on legitimate dead-end roads.
 
 ---
 
@@ -136,7 +136,7 @@ Endpoint gaps are the most common and impactful error in street network data:
 
 ### 3.2 What were the main technical challenges?
 
-1. **Adaptive thresholds:** Every dataset has different coordinate scales. We derive ALL thresholds from the dataset itself (median of dangling-endpoint distances for gap detection, percentile-based for statistical outliers).
+1. **Adaptive thresholds:** Every dataset has different coordinate scales. We derive ALL thresholds from the dataset itself — using the 75th percentile of dangling-endpoint gap distances, capped at 15% of average segment length to prevent dead-end roads from being flagged.
 
 2. **No labeled training data:** Isolation Forest is unsupervised — it learns "normal" connectivity from the uploaded dataset and flags outliers automatically. No labels needed.
 
@@ -239,5 +239,7 @@ We confirm that this submission is our own work and was developed during the hac
 
 | Field | Value |
 |-------|-------|
-| **Team Representative Name** | Puranjay |
+| **Team Representative Name** | Puranjay Gambhir |
+| **Team Members** | Puranjay Gambhir, Akshobhya Rao, Rohan |
 | **Confirmation** | Yes |
+| **Date** | February 2026 |

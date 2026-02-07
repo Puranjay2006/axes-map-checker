@@ -9,8 +9,9 @@ Uses Feature Extraction + Rule-Based Gap Detection + Isolation Forest ML
 to find, visualize, and auto-fix broken connections.
 
 Team: FutureFormers | IIT Mandi Hackathon 3.0 | Problem Statement 2
+Members: Puranjay Gambhir, Akshobhya Rao, Rohan
 Company: Axes Systems GmbH | Option B: Rule-Based Geometry Validation
-Version: 6.2.0
+Version: 7.0.0
 """
 
 import streamlit as st
@@ -34,10 +35,11 @@ from sklearn.preprocessing import StandardScaler
 
 APP_CONFIG = {
     "title": "Route Continuity Gap Detector",
-    "version": "6.3.0",
+    "version": "7.0.0",
     "icon": "🔍",
     "precision": 6,
     "team": "FutureFormers",
+    "members": ["Puranjay Gambhir", "Akshobhya Rao", "Rohan"],
     "error_type": "ENDPOINT_GAP",
     "error_label": "Route Continuity Gap",
 }
@@ -948,6 +950,33 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
     folium.LayerControl(collapsed=False).add_to(m)
     all_coords = [norm(c[0], c[1]) for line in lines for c in line.coords]
     m.fit_bounds(all_coords)
+
+    # Add hover highlight/thicken effect for all polylines via JavaScript
+    hover_js = """
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            var map = Object.values(window).find(v => v instanceof L.Map);
+            if (!map) return;
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+                    var origWeight = layer.options.weight || 3;
+                    var origOpacity = layer.options.opacity || 0.7;
+                    layer.on('mouseover', function() {
+                        this.setStyle({weight: origWeight + 5, opacity: 1.0});
+                        this.bringToFront();
+                    });
+                    layer.on('mouseout', function() {
+                        this.setStyle({weight: origWeight, opacity: origOpacity});
+                    });
+                }
+            });
+        }, 500);
+    });
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(hover_js))
+
     return m
 
 
@@ -988,6 +1017,7 @@ def render_hero():
             <h1 class="hero-title">Route Continuity Gap Detector</h1>
             <p class="hero-subtitle">Detects endpoint gaps where road segments should connect but don't — breaking route continuity</p>
             <div class="hero-badge"><span>🔗</span><span>ONE Error Type • Rule-Based + ML • Axes Systems GmbH</span></div>
+            <p style="font-size:0.85rem;color:var(--gray-500);margin:0.6rem 0 0;">Built by <b>Puranjay Gambhir</b>, <b>Akshobhya Rao</b> & <b>Rohan</b> — IIT Mandi Hackathon 3.0, 2026</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -1075,6 +1105,51 @@ def render_stats(stats: Dict, issues: List[Dict]):
                 <div class="score-label">{se} {sl}</div>
             </div>
         """, unsafe_allow_html=True)
+
+        # "How is this score calculated?" toggle
+        with st.container():
+            if st.button("❓ How is this score calculated?", key="toggle_score_explain", use_container_width=True):
+                st.session_state['show_score_explain'] = not st.session_state.get('show_score_explain', False)
+            if st.session_state.get('show_score_explain', False):
+                st.markdown(f"""
+                <div style="background:white;border-radius:16px;padding:1.25rem 1.5rem;margin-top:0.5rem;
+                            border:1px solid rgba(99,102,241,0.12);box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <h4 style="color:#1e293b;margin:0 0 0.75rem;font-weight:700;">📐 Score Calculation</h4>
+                    <p style="color:#475569;font-size:0.88rem;line-height:1.7;margin:0 0 0.75rem;">
+                        The <b>Route Continuity Score</b> measures what percentage of your road
+                        segments have clean, unbroken endpoint connections.
+                    </p>
+                    <div style="background:#f1f5f9;border-radius:12px;padding:1rem 1.25rem;margin-bottom:0.75rem;">
+                        <p style="color:#334155;font-size:0.9rem;font-weight:600;margin:0 0 0.5rem;">Formula:</p>
+                        <code style="font-size:0.88rem;color:#4f46e5;background:none;">
+                            Score = (1 − affected_segments / total_segments) × 100%
+                        </code>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                        <tr style="border-bottom:1px solid #e2e8f0;">
+                            <td style="padding:0.4rem 0;color:#475569;"><b>Total Segments</b></td>
+                            <td style="padding:0.4rem 0;color:#1e293b;text-align:right;font-weight:600;">{stats['total_segments']}</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #e2e8f0;">
+                            <td style="padding:0.4rem 0;color:#475569;"><b>Segments with Gaps</b></td>
+                            <td style="padding:0.4rem 0;color:#ef4444;text-align:right;font-weight:600;">{affected}</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #e2e8f0;">
+                            <td style="padding:0.4rem 0;color:#475569;"><b>Clean Segments</b></td>
+                            <td style="padding:0.4rem 0;color:#10b981;text-align:right;font-weight:600;">{stats['total_segments'] - affected}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:0.4rem 0;color:#475569;"><b>Continuity Score</b></td>
+                            <td style="padding:0.4rem 0;color:#4f46e5;text-align:right;font-weight:700;font-size:1rem;">{quality:.0f}%</td>
+                        </tr>
+                    </table>
+                    <p style="color:#64748b;font-size:0.8rem;margin:0.75rem 0 0;line-height:1.5;">
+                        <b>🌟 Excellent (≥85%)</b> — minimal gaps, network is well-connected<br>
+                        <b>👍 Good (60–84%)</b> — some gaps exist but network is mostly functional<br>
+                        <b>🔧 Needs Attention (&lt;60%)</b> — significant connectivity issues detected
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
 
 def render_examples():
@@ -1180,78 +1255,132 @@ def _run_example(wkt_data: str, label: str):
 
 
 def render_training():
-    """Training instructions — how to add more examples."""
+    """Training instructions — styled cards matching the app aesthetic."""
     st.markdown("""
         <div class="section-header"><span class="icon">📚</span><h3>Training Instructions</h3></div>
     """, unsafe_allow_html=True)
 
+    # Intro card
     st.markdown("""
-    ### How to Add More Training Examples
+        <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.08));
+                    border-radius:20px;padding:1.5rem 1.75rem;margin-bottom:1.5rem;
+                    border:1px solid rgba(99,102,241,0.12);">
+            <h4 style="color:#4f46e5;margin:0 0 0.5rem;font-weight:700;">🤖 No Manual Labeling Needed</h4>
+            <p style="color:#475569;font-size:0.9rem;line-height:1.7;margin:0;">
+                The system uses <b>unsupervised learning</b> (Isolation Forest) — it learns what "normal"
+                looks like from whatever dataset you upload. However, you can improve detection by
+                adding more example data. Follow the steps below.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    The system uses **unsupervised learning** (Isolation Forest) — it learns what "normal"
-    looks like from whatever dataset you upload, so **no manual labeling is needed**.
-    However, you can improve detection by adding more example data:
+    # Training steps as styled cards
+    training_steps = [
+        {
+            'num': '1', 'color': '#6366f1', 'icon': '📄',
+            'title': 'Prepare Your WKT File',
+            'body': (
+                'Create a <code>.wkt</code> text file with LINESTRING geometries — one per line:'
+                '<div style="background:#f1f5f9;border-radius:10px;padding:0.75rem 1rem;margin:0.6rem 0;'
+                'font-family:monospace;font-size:0.85rem;color:#334155;line-height:1.8;">'
+                'LINESTRING(x1 y1, x2 y2, x3 y3, ...)<br>'
+                'LINESTRING(x4 y4, x5 y5, x6 y6, ...)'
+                '</div>'
+                'Each LINESTRING represents a road segment. Coordinates can be in any projected CRS.'
+            ),
+        },
+        {
+            'num': '2', 'color': '#f59e0b', 'icon': '🔗',
+            'title': 'Include Known Errors',
+            'body': (
+                'To test the system, deliberately introduce endpoint gaps:'
+                '<ul style="margin:0.5rem 0;padding-left:1.5rem;line-height:1.8;">'
+                '<li>Take two segments that should connect: <code>...140 220)</code> and <code>LINESTRING(140 220, ...)</code></li>'
+                '<li>Shift one endpoint slightly: <code>LINESTRING(140.5 220.3, ...)</code></li>'
+                '<li>This creates a gap the detector will flag</li>'
+                '</ul>'
+            ),
+        },
+        {
+            'num': '3', 'color': '#10b981', 'icon': '📤',
+            'title': 'Upload and Analyze',
+            'body': (
+                '<ol style="margin:0.5rem 0;padding-left:1.5rem;line-height:1.8;">'
+                '<li>Use the <b>sidebar file uploader</b> to load your <code>.wkt</code> file</li>'
+                '<li>The system automatically extracts features, runs rules + ML, and reports gaps</li>'
+                '<li>Adjust the <b>Anomaly Sensitivity</b> slider to control ML aggressiveness</li>'
+                '</ol>'
+            ),
+        },
+        {
+            'num': '4', 'color': '#ef4444', 'icon': '📋',
+            'title': 'Interpret Results',
+            'body': (
+                '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin:0.5rem 0;">'
+                '<tr style="border-bottom:2px solid #e2e8f0;"><th style="text-align:left;padding:0.4rem 0.5rem;color:#1e293b;">Severity</th>'
+                '<th style="text-align:left;padding:0.4rem 0.5rem;color:#1e293b;">Meaning</th></tr>'
+                '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:0.4rem 0.5rem;"><span style="background:#fef2f2;color:#991b1b;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;font-size:0.8rem;">HIGH</span></td>'
+                '<td style="padding:0.4rem 0.5rem;color:#475569;">Clearly a broken connection (confidence ≥ 70%)</td></tr>'
+                '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:0.4rem 0.5rem;"><span style="background:#fffbeb;color:#92400e;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;font-size:0.8rem;">MEDIUM</span></td>'
+                '<td style="padding:0.4rem 0.5rem;color:#475569;">Likely a gap, could be intentional (40–70%)</td></tr>'
+                '<tr><td style="padding:0.4rem 0.5rem;"><span style="background:#f0f9ff;color:#1e40af;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;font-size:0.8rem;">LOW</span></td>'
+                '<td style="padding:0.4rem 0.5rem;color:#475569;">Possible gap but less certain (&lt;40%)</td></tr>'
+                '</table>'
+                '<div style="margin-top:0.6rem;font-size:0.85rem;color:#475569;line-height:1.7;">'
+                '<b>Source: rule</b> — detected by the data-driven gap rule<br>'
+                '<b>Source: ml</b> — detected by Isolation Forest anomaly model<br>'
+                '<b>Source: rule+ml</b> — flagged by both (highest reliability)'
+                '</div>'
+            ),
+        },
+        {
+            'num': '5', 'color': '#8b5cf6', 'icon': '🔧',
+            'title': 'Download the Auto-Fix',
+            'body': (
+                'Go to the <b>🔧 Auto-Fix</b> tab to download a corrected <code>.wkt</code> file '
+                'with all detected gaps snapped closed. Compare the original and corrected files '
+                'to verify the changes.'
+            ),
+        },
+    ]
 
-    ---
+    for s in training_steps:
+        st.markdown(f"""
+            <div style="background:white;border-radius:18px;padding:1.25rem 1.5rem;margin-bottom:1rem;
+                        border:1px solid rgba(99,102,241,0.1);border-left:4px solid {s['color']};
+                        box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.6rem;">
+                    <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,{s['color']},{s['color']}cc);
+                                display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;color:white !important;">
+                        {s['icon']}
+                    </div>
+                    <div>
+                        <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:{s['color']};">Step {s['num']}</span>
+                        <h4 style="margin:0;font-size:1rem;font-weight:700;color:#1e293b;">{s['title']}</h4>
+                    </div>
+                </div>
+                <div style="color:#475569;font-size:0.88rem;line-height:1.7;">
+                    {s['body']}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    #### Step 1: Prepare Your WKT File
-
-    Create a `.wkt` text file with LINESTRING geometries — one per line:
-
-    ```text
-    LINESTRING(x1 y1, x2 y2, x3 y3, ...)
-    LINESTRING(x4 y4, x5 y5, x6 y6, ...)
-    ```
-
-    Each LINESTRING represents a road segment. Coordinates can be in any projected CRS.
-
-    ---
-
-    #### Step 2: Include Known Errors
-
-    To test the system, deliberately introduce endpoint gaps:
-    - Take two segments that should connect: `...140 220)` and `LINESTRING(140 220, ...)`
-    - Shift one endpoint slightly: `LINESTRING(140.5 220.3, ...)` — this creates a gap
-    - The detector will flag the broken connection
-
-    ---
-
-    #### Step 3: Upload and Analyze
-
-    1. Use the **sidebar file uploader** to load your `.wkt` file
-    2. The system automatically extracts features, runs rules + ML, and reports gaps
-    3. Adjust the **Anomaly Sensitivity** slider to control how aggressively the ML flags outliers
-
-    ---
-
-    #### Step 4: Interpret Results
-
-    | Severity | Meaning |
-    |----------|---------|
-    | **HIGH** | Gap is small and clearly a broken connection (confidence ≥ 70%) |
-    | **MEDIUM** | Likely a gap but could be intentional (confidence 40-70%) |
-    | **LOW** | Possible gap but less certain (confidence < 40%) |
-
-    - **Source: rule** — detected by the data-driven gap rule
-    - **Source: ml** — detected by Isolation Forest anomaly model
-    - **Source: rule+ml** — flagged by both (highest reliability)
-
-    ---
-
-    #### Step 5: Use Auto-Fix
-
-    Go to the **🔧 Auto-Fix** tab to download a corrected `.wkt` file with gaps snapped closed.
-
-    ---
-
-    #### How the ML Learns
-
-    The Isolation Forest is **retrained on every upload** — it learns the statistical
-    distribution of your specific dataset's features (length, vertex density, connectivity).
-    Larger and more varied datasets produce more reliable anomaly detection.
-
-    **No saved model or manual labels are needed.** The system adapts automatically.
-    """)
+    # How the ML learns — highlight card
+    st.markdown("""
+        <div style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.08));
+                    border-radius:18px;padding:1.25rem 1.5rem;margin-top:0.5rem;
+                    border:1px solid rgba(16,185,129,0.15);">
+            <h4 style="color:#059669;margin:0 0 0.5rem;font-weight:700;">🧠 How the ML Learns</h4>
+            <p style="color:#475569;font-size:0.88rem;line-height:1.7;margin:0 0 0.5rem;">
+                The Isolation Forest is <b>retrained on every upload</b> — it learns the statistical
+                distribution of your specific dataset's features (length, vertex density, connectivity).
+                Larger and more varied datasets produce more reliable anomaly detection.
+            </p>
+            <p style="color:#166534;font-size:0.85rem;font-weight:600;margin:0;">
+                ✅ No saved model or manual labels needed — the system adapts automatically.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
 
 def render_welcome():
@@ -1341,7 +1470,7 @@ def render_welcome():
 
 
 def render_onboarding():
-    """Interactive step-by-step tutorial that walks users through the app."""
+    """Interactive step-by-step tutorial with progress bar and visual icons."""
     st.markdown("<br>", unsafe_allow_html=True)
 
     if 'onboarding_step' not in st.session_state:
@@ -1351,64 +1480,96 @@ def render_onboarding():
 
     tutorial_steps = [
         {
-            'badge': 'Step 1 of 5',
-            'title': '📁 Upload Your Data',
+            'icon': '📁', 'color': '#6366f1',
+            'title': 'Upload Your Data',
             'desc': (
                 'Look at the <b>sidebar on the left</b>. You\'ll see a file uploader — '
                 'drag and drop your <code>.wkt</code> file there. Or click the '
                 '<b>"🎯 Load Demo Data"</b> button to try with our built-in 56-segment street network. '
                 'This is where everything starts!'
             ),
+            'tip': '💡 <b>Pro tip:</b> The demo dataset is from a real street network — perfect for exploring all features.',
         },
         {
-            'badge': 'Step 2 of 5',
-            'title': '📊 Check the Dashboard Metrics',
+            'icon': '📊', 'color': '#f59e0b',
+            'title': 'Check the Dashboard Metrics',
             'desc': (
                 'Once data is loaded, four metric cards appear at the top: <b>Segments</b> (total road count), '
                 '<b>Gaps Found</b> (detected errors), <b>High Severity</b> (critical gaps), and '
                 '<b>Dangling Nodes</b> (endpoints connected to only one road). '
                 'A quick glance tells you the overall health of your network.'
             ),
+            'tip': '💡 <b>Pro tip:</b> Dangling nodes aren\'t always errors — some are legitimate dead-end roads.',
         },
         {
-            'badge': 'Step 3 of 5',
-            'title': '🗺️ Explore the Map',
+            'icon': '🗺️', 'color': '#10b981',
+            'title': 'Explore the Interactive Map',
             'desc': (
                 'The <b>Map tab</b> shows your road network interactively. '
                 '<b>Blue lines</b> = healthy roads. <b>Red/orange lines</b> = segments with gaps. '
                 '<b>Colored circle markers</b> = exact gap locations — click them for a detailed popup '
                 'explaining <i>what</i> the gap is, <i>how big</i> it is, and <i>why</i> it was flagged. '
-                'Use the <b>layer panel</b> (top-right) to toggle: Road Network, Gap Segments, and Gap Locations.'
+                '<b>Hover over any segment</b> to highlight it. '
+                'Use the <b>layer panel</b> (top-right) to toggle layers on/off.'
             ),
+            'tip': '💡 <b>Pro tip:</b> Click any red circle marker for the full error explanation and fix suggestion.',
         },
         {
-            'badge': 'Step 4 of 5',
-            'title': '📋 Review the Gap Report',
+            'icon': '📋', 'color': '#ef4444',
+            'title': 'Review the Gap Report',
             'desc': (
                 'Switch to the <b>Gap Report tab</b> to see a sortable table of every detected gap: '
                 'which segment, which endpoint, the gap distance, severity (HIGH/MEDIUM/LOW), '
                 'and confidence percentage. You can <b>download</b> the report as CSV, JSON, or a text file.'
             ),
+            'tip': '💡 <b>Pro tip:</b> Click column headers to sort — try sorting by Confidence to see the most certain gaps first.',
         },
         {
-            'badge': 'Step 5 of 5',
-            'title': '🔧 Download the Auto-Fix',
+            'icon': '🔧', 'color': '#8b5cf6',
+            'title': 'Download the Auto-Fix',
             'desc': (
                 'Go to the <b>Auto-Fix tab</b> to see exactly how each gap should be corrected. '
                 'The system calculates the nearest snap point on the neighboring segment and shows '
                 'the original vs. corrected coordinates. Click <b>"Download Corrected .wkt"</b> '
                 'to get a fixed version of your road network with all gaps snapped closed!'
             ),
+            'tip': '💡 <b>Pro tip:</b> Compare the original and corrected files in a diff tool to verify changes.',
         },
     ]
 
-    if step < len(tutorial_steps):
+    total = len(tutorial_steps)
+
+    if step < total:
         s = tutorial_steps[step]
+        pct = ((step + 1) / total) * 100
+
+        # Progress bar + step dots
+        dots_html = ""
+        for i in range(total):
+            if i < step:
+                dots_html += f'<div style="width:12px;height:12px;border-radius:50%;background:#10b981;"></div>'
+            elif i == step:
+                dots_html += f'<div style="width:12px;height:12px;border-radius:50%;background:{s["color"]};box-shadow:0 0 0 3px {s["color"]}44;"></div>'
+            else:
+                dots_html += '<div style="width:12px;height:12px;border-radius:50%;background:#e2e8f0;"></div>'
+
         st.markdown(f"""
             <div class="onboarding-overlay">
-                <div class="onboarding-step-badge">{s['badge']}</div>
-                <h3 class="onboarding-title">{s['title']}</h3>
-                <p class="onboarding-desc">{s['desc']}</p>
+                <div class="onboarding-step-badge">Step {step + 1} of {total}</div>
+                <div style="display:flex;align-items:center;gap:0.75rem;margin:0.75rem 0 0.5rem;">
+                    <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,{s['color']},{s['color']}cc);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">{s['icon']}</div>
+                    <h3 style="margin:0;font-size:1.15rem;font-weight:700;color:#1e293b;">{s['title']}</h3>
+                </div>
+                <p style="color:#475569;font-size:0.9rem;line-height:1.6;margin:0 0 0.75rem;">{s['desc']}</p>
+                <div style="background:#f0fdf4;border-radius:10px;padding:0.6rem 0.9rem;border-left:3px solid #10b981;">
+                    <p style="color:#166534;font-size:0.82rem;margin:0;line-height:1.5;">{s['tip']}</p>
+                </div>
+                <div style="margin-top:1rem;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                    <div style="width:{pct}%;height:100%;background:linear-gradient(90deg,{s['color']},{s['color']}cc);border-radius:3px;transition:width 0.3s;"></div>
+                </div>
+                <div style="display:flex;justify-content:center;gap:8px;margin-top:0.6rem;">
+                    {dots_html}
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -1420,16 +1581,16 @@ def render_onboarding():
                     st.rerun()
         with col2:
             if st.button("Skip Tutorial", key="onboard_skip"):
-                st.session_state['onboarding_step'] = len(tutorial_steps)
+                st.session_state['onboarding_step'] = total
                 st.rerun()
         with col3:
-            if step < len(tutorial_steps) - 1:
+            if step < total - 1:
                 if st.button("Next →", key="onboard_next"):
                     st.session_state['onboarding_step'] = step + 1
                     st.rerun()
             else:
                 if st.button("✅ Finish", key="onboard_finish"):
-                    st.session_state['onboarding_step'] = len(tutorial_steps)
+                    st.session_state['onboarding_step'] = total
                     st.rerun()
     else:
         # Tutorial completed — show a small restart link
@@ -1480,7 +1641,8 @@ def render_sidebar() -> Tuple[Optional[str], float]:
         st.markdown("""
             <div style="text-align:center;font-size:0.72rem;opacity:0.6;">
                 FutureFormers • IIT Mandi Hackathon 3.0<br>
-                Axes Systems GmbH • Option B<br>© 2025
+                Puranjay · Akshobhya · Rohan<br>
+                Axes Systems GmbH • Option B<br>© 2026
             </div>
         """, unsafe_allow_html=True)
 
