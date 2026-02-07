@@ -377,6 +377,26 @@ CUSTOM_CSS = """
     .onboarding-desc { font-size: 0.9rem; color: var(--gray-600); line-height: 1.5; margin: 0; }
 
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
+
+    /* Hide the sidebar collapse button icon text ("keyboard_double_arrow_left") */
+    [data-testid="stSidebarCollapseButton"] button span,
+    [data-testid="collapsedControl"] button span { font-size: 0 !important; }
+    [data-testid="stSidebarCollapseButton"] button svg,
+    [data-testid="collapsedControl"] button svg { width: 24px; height: 24px; }
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] { background: transparent !important; }
+
+    /* Ensure readable text on ALL light backgrounds in main content */
+    .main [data-testid="stExpander"] summary,
+    .main [data-testid="stExpander"] summary span { color: var(--gray-800) !important; }
+    .main [data-testid="stExpander"] [data-testid="stExpanderDetails"] { color: var(--gray-800) !important; }
+    .main .stMarkdown p, .main .stMarkdown li { color: var(--gray-700); }
+    .main .stMarkdown h1, .main .stMarkdown h2, .main .stMarkdown h3,
+    .main .stMarkdown h4 { color: var(--gray-900) !important; }
+    .main label, .main .stSlider label,
+    .main [data-baseweb="select"] { color: var(--gray-800) !important; }
+    .main [data-testid="stWidgetLabel"] label p { color: var(--gray-800) !important; }
+
     html { scroll-behavior: smooth; }
     ::-webkit-scrollbar { width:8px; height:8px; }
     ::-webkit-scrollbar-track { background:rgba(0,0,0,0.1); border-radius:10px; }
