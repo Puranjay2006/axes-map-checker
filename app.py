@@ -258,6 +258,12 @@ CUSTOM_CSS = """
         background: rgba(255,255,255,0.1); border-radius: 12px; padding: 0.5rem;
         border: 2px dashed rgba(255,255,255,0.3);
     }
+    /* Fix file uploader inner area text — dark text on light dropzone */
+    [data-testid="stFileUploader"] section { background: rgba(255,255,255,0.95) !important; border-radius: 10px !important; }
+    [data-testid="stFileUploader"] section * { color: var(--gray-600) !important; }
+    [data-testid="stFileUploader"] section button { color: var(--primary) !important; border-color: var(--primary) !important; }
+    [data-testid="stFileUploader"] section small { color: var(--gray-400) !important; }
+    [data-testid="stFileUploader"] > label p { color: var(--gray-100) !important; }
 
     .stAlert { border-radius:16px; border:none; backdrop-filter:blur(8px); }
     .stAlert > div { border-radius:16px; }
