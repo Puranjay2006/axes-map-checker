@@ -389,14 +389,21 @@ CUSTOM_CSS = """
     [data-testid="collapsedControl"] { background: transparent !important; }
 
     /* Force ALL text in main content area to be dark — override any inherited light colors */
-    .main * { color: var(--gray-800); }
+    .main * { color: var(--gray-800) !important; }
     .main [data-testid="stExpander"] summary,
     .main [data-testid="stExpander"] summary *,
     .main [data-testid="stExpander"] details * { color: var(--gray-800) !important; }
     .main .stMarkdown p, .main .stMarkdown li, .main .stMarkdown td,
-    .main .stMarkdown code { color: var(--gray-700) !important; }
+    .main .stMarkdown span, .main .stMarkdown strong, .main .stMarkdown b,
+    .main .stMarkdown em, .main .stMarkdown code { color: var(--gray-700) !important; }
     .main .stMarkdown h1, .main .stMarkdown h2, .main .stMarkdown h3,
-    .main .stMarkdown h4 { color: var(--gray-900) !important; }
+    .main .stMarkdown h4, .main .stMarkdown h5 { color: var(--gray-900) !important; }
+    .main .stTabs [data-baseweb="tab-panel"] * { color: var(--gray-800) !important; }
+    .main .stTabs [data-baseweb="tab-panel"] h1,
+    .main .stTabs [data-baseweb="tab-panel"] h2,
+    .main .stTabs [data-baseweb="tab-panel"] h3,
+    .main .stTabs [data-baseweb="tab-panel"] h4 { color: var(--gray-900) !important; }
+    .main .stTabs [data-baseweb="tab-panel"] hr { border-color: rgba(0,0,0,0.1) !important; }
     .main label, .main .stSlider label,
     .main [data-baseweb="select"] { color: var(--gray-800) !important; }
     .main [data-testid="stWidgetLabel"] label p { color: var(--gray-800) !important; }
