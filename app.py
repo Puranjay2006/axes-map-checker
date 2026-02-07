@@ -315,6 +315,68 @@ CUSTOM_CSS = """
     .example-card.correct { border-left: 4px solid #10b981; }
     .example-card.error { border-left: 4px solid #ef4444; }
 
+    .legend-box {
+        background: rgba(255,255,255,0.95); border-radius: 16px; padding: 1.25rem;
+        border: 1px solid rgba(99,102,241,0.12); margin-top: 1rem;
+    }
+    .legend-title { font-size: 0.95rem; font-weight: 700; color: var(--gray-900); margin: 0 0 0.75rem; }
+    .legend-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 0.5rem 1.5rem; }
+    .legend-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; }
+    .legend-swatch { width: 18px; height: 18px; border-radius: 6px; flex-shrink: 0; border: 2px solid rgba(0,0,0,0.08); }
+    .legend-label { font-size: 0.82rem; color: var(--gray-600); line-height: 1.3; }
+    .legend-label b { color: var(--gray-800); }
+
+    .how-it-works {
+        background: rgba(255,255,255,0.92); backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.5); border-radius: 28px;
+        padding: 2.5rem; margin-top: 2rem; box-shadow: var(--shadow-xl);
+    }
+    .hiw-title { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); text-align: center; margin: 0 0 0.4rem; }
+    .hiw-subtitle { font-size: 1rem; color: var(--gray-600); text-align: center; margin: 0 0 2rem; }
+    .pipeline-steps { display: flex; flex-direction: column; gap: 0; max-width: 700px; margin: 0 auto; }
+    .pipe-step {
+        display: flex; gap: 1.25rem; align-items: flex-start; position: relative;
+        padding: 1.25rem 0;
+    }
+    .pipe-step:not(:last-child)::after {
+        content: ''; position: absolute; left: 24px; top: 60px; bottom: 0;
+        width: 3px; background: linear-gradient(180deg, var(--primary-light), rgba(99,102,241,0.15));
+    }
+    .pipe-icon {
+        width: 50px; height: 50px; border-radius: 16px; display: flex; align-items: center;
+        justify-content: center; font-size: 1.5rem; flex-shrink: 0; color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 1;
+    }
+    .pipe-icon.a { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+    .pipe-icon.b { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .pipe-icon.c { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    .pipe-icon.d { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+    .pipe-icon.e { background: linear-gradient(135deg, #10b981, #059669); }
+    .pipe-content { flex: 1; }
+    .pipe-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); margin: 0 0 0.15rem; }
+    .pipe-title { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin: 0 0 0.3rem; }
+    .pipe-desc { font-size: 0.88rem; color: var(--gray-600); line-height: 1.5; margin: 0; }
+
+    .onboarding-overlay {
+        background: rgba(255,255,255,0.95); backdrop-filter: blur(16px);
+        border: 2px solid var(--primary); border-radius: 20px;
+        padding: 1.5rem; margin-bottom: 1.5rem; position: relative;
+        box-shadow: 0 0 0 4px rgba(99,102,241,0.15), var(--shadow-xl);
+        animation: onboard-pulse 2s ease-in-out infinite;
+    }
+    @keyframes onboard-pulse {
+        0%,100% { box-shadow: 0 0 0 4px rgba(99,102,241,0.15), var(--shadow-xl); }
+        50% { box-shadow: 0 0 0 8px rgba(99,102,241,0.1), var(--shadow-xl); }
+    }
+    .onboarding-step-badge {
+        position: absolute; top: -12px; left: 20px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white; padding: 0.2rem 0.9rem; border-radius: 100px;
+        font-size: 0.75rem; font-weight: 700;
+    }
+    .onboarding-title { font-size: 1.15rem; font-weight: 700; color: var(--gray-900); margin: 0.5rem 0 0.3rem; }
+    .onboarding-desc { font-size: 0.9rem; color: var(--gray-600); line-height: 1.5; margin: 0; }
+
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
     html { scroll-behavior: smooth; }
     ::-webkit-scrollbar { width:8px; height:8px; }
@@ -749,22 +811,54 @@ def create_map(lines: List[LineString], issues: List[Dict]) -> folium.Map:
             sev = issue.get('severity', 'MEDIUM')
             color = '#ef4444' if sev == 'HIGH' else '#f59e0b' if sev == 'MEDIUM' else '#94a3b8'
 
+            # Build human-readable "why flagged" explanation
+            gap_dist = issue.get('gap_distance', 0)
+            endpoint_label = issue.get('endpoint', '')
+            gap_to = issue.get('gap_to_segment', '?')
+            conf = issue.get('confidence', 0)
+            src = issue.get('confirmed_by', issue.get('source', 'rule'))
+
+            if endpoint_label == 'ml_flagged':
+                why_text = (
+                    f"The ML model detected that this segment has unusual "
+                    f"connectivity compared to the rest of the network. "
+                    f"Its endpoint distances and topology deviate from the norm."
+                )
+            else:
+                why_text = (
+                    f"This segment's {endpoint_label} endpoint is only {gap_dist:.4f} units "
+                    f"away from segment #{gap_to}, but they don't share an exact coordinate. "
+                    f"In a valid road network, connecting segments must share the exact same "
+                    f"endpoint coordinates — otherwise routing algorithms can't traverse the junction."
+                )
+
+            src_text = {
+                'rule': 'Rule-based gap detection',
+                'ml': 'Isolation Forest ML model',
+                'rule+ml': 'Both rule engine AND ML model agree',
+            }.get(src, src)
+
             folium.CircleMarker(location=loc, radius=16, color=color, fill=True,
                 fillColor=color, fillOpacity=0.2, weight=0).add_to(marker_group)
             folium.CircleMarker(location=loc, radius=8, color='white', weight=2,
                 fill=True, fillColor=color, fillOpacity=0.95,
                 popup=folium.Popup(
-                    f"""<div style="font-family:'DM Sans',sans-serif;min-width:220px;padding:4px;">
-                    <h4 style="color:{color};margin:0 0 8px;font-weight:700;">🔗 Route Gap</h4>
+                    f"""<div style="font-family:'DM Sans',sans-serif;min-width:260px;padding:4px;">
+                    <h4 style="color:{color};margin:0 0 8px;font-weight:700;">🔗 Route Gap Detected</h4>
                     <div style="background:#f8fafc;border-radius:8px;padding:8px;">
                         <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Segment:</b> #{issue['geometry_id']}</p>
-                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Endpoint:</b> {issue.get('endpoint','')}</p>
-                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Gap:</b> {issue.get('gap_distance',0):.4f} units</p>
-                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Confidence:</b> {issue.get('confidence',0):.0%}</p>
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Endpoint:</b> {endpoint_label}</p>
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Gap Size:</b> {gap_dist:.4f} units</p>
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Confidence:</b> {conf:.0%}</p>
                         <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Severity:</b>
                             <span style="background:{color};color:white;padding:1px 8px;border-radius:12px;font-size:0.75rem;">{sev}</span></p>
-                    </div></div>""", max_width=240),
-                tooltip=f"#{issue['geometry_id']} Gap ({sev})"
+                        <p style="margin:4px 0;color:#334155;font-size:0.85rem;"><b>Source:</b> {src_text}</p>
+                    </div>
+                    <div style="background:#fef3c7;border-radius:8px;padding:8px;margin-top:8px;border-left:3px solid #f59e0b;">
+                        <p style="margin:0;color:#92400e;font-size:0.8rem;font-weight:600;">⚠️ Why is this an error?</p>
+                        <p style="margin:4px 0 0;color:#78350f;font-size:0.78rem;line-height:1.4;">{why_text}</p>
+                    </div></div>""", max_width=320),
+                tooltip=f"#{issue['geometry_id']} Gap ({sev}) — hover for details"
             ).add_to(marker_group)
         marker_group.add_to(m)
 
@@ -910,65 +1004,65 @@ def render_examples():
         </p>
     """, unsafe_allow_html=True)
 
-    # ---- CORRECT EXAMPLE ----
-    st.markdown("""
-        <div class="example-card correct">
-            <h4 style="color:#059669;margin:0 0 0.5rem;">✅ Example: Correct — Fully Connected Network</h4>
-            <p style="color:#64748b;font-size:0.85rem;margin:0;">
-                All 5 segments share exact endpoints. No gaps detected.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    with st.expander("View WKT & Run Analysis"):
-        st.code(EXAMPLE_CORRECT, language="text")
-        if st.button("▶ Run on Correct Example", key="run_correct"):
-            _run_example(EXAMPLE_CORRECT, "correct")
+    # Define examples list
+    examples = [
+        {
+            'key': 'correct',
+            'wkt': EXAMPLE_CORRECT,
+            'card_class': 'correct',
+            'icon': '✅',
+            'title': 'Example: Correct — Fully Connected Network',
+            'title_color': '#059669',
+            'desc': 'All 5 segments share exact endpoints. No gaps detected.',
+        },
+        {
+            'key': 'error1',
+            'wkt': EXAMPLE_ERROR_1,
+            'card_class': 'error',
+            'icon': '❌',
+            'title': 'Example 1: Two Endpoint Gaps (~0.5 units)',
+            'title_color': '#ef4444',
+            'desc': 'Segments 1→2 and 3→5 have small coordinate mismatches at their junction points.',
+        },
+        {
+            'key': 'error2',
+            'wkt': EXAMPLE_ERROR_2,
+            'card_class': 'error',
+            'icon': '❌',
+            'title': 'Example 2: Multiple Gaps in a Chain',
+            'title_color': '#ef4444',
+            'desc': 'A 6-segment chain with gaps at segments 3, 4, and 6 — breaking 3 continuity points.',
+        },
+        {
+            'key': 'error3',
+            'wkt': EXAMPLE_ERROR_3,
+            'card_class': 'error',
+            'icon': '❌',
+            'title': 'Example 3: Near-Miss Gaps (0.05–0.6 units)',
+            'title_color': '#ef4444',
+            'desc': 'Endpoints are very close but not touching — typical of coordinate rounding errors during data export.',
+        },
+    ]
 
-    # ---- ERROR EXAMPLE 1 ----
-    st.markdown("""
-        <div class="example-card error">
-            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 1: Two Endpoint Gaps (~0.5 units)</h4>
-            <p style="color:#64748b;font-size:0.85rem;margin:0;">
-                Segments 1→2 and 3→5 have small coordinate mismatches at their junction points.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    with st.expander("View WKT & Run Analysis"):
-        st.code(EXAMPLE_ERROR_1, language="text")
-        if st.button("▶ Run on Error Example 1", key="run_err1"):
-            _run_example(EXAMPLE_ERROR_1, "error1")
+    for ex in examples:
+        st.markdown(f"""
+            <div class="example-card {ex['card_class']}">
+                <h4 style="color:{ex['title_color']};margin:0 0 0.5rem;">{ex['icon']} {ex['title']}</h4>
+                <p style="color:#64748b;font-size:0.85rem;margin:0;">{ex['desc']}</p>
+            </div>
+        """, unsafe_allow_html=True)
+        with st.expander("View WKT & Run Analysis"):
+            st.code(ex['wkt'], language="text")
+            if st.button(f"▶ Run on {ex['title'].split(':')[0] if ':' in ex['title'] else ex['title']}", key=f"run_{ex['key']}"):
+                st.session_state[f'example_result_{ex["key"]}'] = ex['key']
 
-    # ---- ERROR EXAMPLE 2 ----
-    st.markdown("""
-        <div class="example-card error">
-            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 2: Multiple Gaps in a Chain</h4>
-            <p style="color:#64748b;font-size:0.85rem;margin:0;">
-                A 6-segment chain with gaps at segments 3, 4, and 6 — breaking 3 continuity points.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    with st.expander("View WKT & Run Analysis"):
-        st.code(EXAMPLE_ERROR_2, language="text")
-        if st.button("▶ Run on Error Example 2", key="run_err2"):
-            _run_example(EXAMPLE_ERROR_2, "error2")
-
-    # ---- ERROR EXAMPLE 3 ----
-    st.markdown("""
-        <div class="example-card error">
-            <h4 style="color:#ef4444;margin:0 0 0.5rem;">❌ Example 3: Near-Miss Gaps (0.05–0.6 units)</h4>
-            <p style="color:#64748b;font-size:0.85rem;margin:0;">
-                Endpoints are very close but not touching — typical of coordinate rounding errors during data export.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    with st.expander("View WKT & Run Analysis"):
-        st.code(EXAMPLE_ERROR_3, language="text")
-        if st.button("▶ Run on Error Example 3", key="run_err3"):
-            _run_example(EXAMPLE_ERROR_3, "error3")
+            # Show persisted results from session state
+            if st.session_state.get(f'example_result_{ex["key"]}') == ex['key']:
+                _run_example(ex['wkt'], ex['key'])
 
 
 def _run_example(wkt_data: str, label: str):
-    """Analyse an example dataset inline."""
+    """Analyse an example dataset inline — results persist via session state."""
     lines = parse_wkt(wkt_data)
     if not lines:
         st.error("Could not parse example.")
@@ -988,7 +1082,10 @@ def _run_example(wkt_data: str, label: str):
         st.success("✅ **No gaps detected.** All endpoints connect properly.")
 
     map_obj = create_map(lines, issues)
-    st_folium(map_obj, height=350, use_container_width=True)
+    st_folium(map_obj, height=350, use_container_width=True, returned_objects=[])
+    if st.button("✕ Clear Result", key=f"clear_{label}"):
+        del st.session_state[f'example_result_{label}']
+        st.rerun()
 
 
 def render_training():
@@ -1087,6 +1184,157 @@ def render_welcome():
     with st.expander("📖 Supported Format"):
         st.code("LINESTRING(x1 y1, x2 y2, x3 y3, ...)\nLINESTRING(x1 y1, x2 y2, ...)", language="text")
         st.markdown("Each line is a valid WKT LINESTRING. Coordinates in any projected CRS.")
+
+    # ---- HOW IT WORKS ----
+    st.markdown("""
+        <div class="how-it-works">
+            <h2 class="hiw-title">⚙️ How It Works</h2>
+            <p class="hiw-subtitle">Our 5-stage AI pipeline detects broken road connections automatically</p>
+            <div class="pipeline-steps">
+                <div class="pipe-step">
+                    <div class="pipe-icon a">📄</div>
+                    <div class="pipe-content">
+                        <p class="pipe-label">Stage A</p>
+                        <p class="pipe-title">Parse WKT Input</p>
+                        <p class="pipe-desc">Your <code>.wkt</code> file is parsed into individual LINESTRING road segments. Each segment's start/end coordinates are extracted for analysis.</p>
+                    </div>
+                </div>
+                <div class="pipe-step">
+                    <div class="pipe-icon b">📊</div>
+                    <div class="pipe-content">
+                        <p class="pipe-label">Stage B</p>
+                        <p class="pipe-title">Extract Connectivity Features</p>
+                        <p class="pipe-desc">For each segment, we compute: endpoint degree (how many roads share that point), distance to nearest neighbor, segment length, and vertex density. These features reveal connectivity patterns.</p>
+                    </div>
+                </div>
+                <div class="pipe-step">
+                    <div class="pipe-icon c">🔍</div>
+                    <div class="pipe-content">
+                        <p class="pipe-label">Stage C</p>
+                        <p class="pipe-title">Rule-Based Gap Detection</p>
+                        <p class="pipe-desc">Dangling endpoints (connected to only 1 segment) are checked: if they're <i>near</i> another road but don't share an exact coordinate, that's a gap. The threshold adapts to each dataset — no hardcoded values.</p>
+                    </div>
+                </div>
+                <div class="pipe-step">
+                    <div class="pipe-icon d">🤖</div>
+                    <div class="pipe-content">
+                        <p class="pipe-label">Stage D</p>
+                        <p class="pipe-title">ML Anomaly Detection</p>
+                        <p class="pipe-desc">An Isolation Forest model learns what "normal" connectivity looks like from your data. Segments with unusual endpoint patterns are flagged as potential hidden gaps. No training labels needed.</p>
+                    </div>
+                </div>
+                <div class="pipe-step">
+                    <div class="pipe-icon e">✅</div>
+                    <div class="pipe-content">
+                        <p class="pipe-label">Stage E</p>
+                        <p class="pipe-title">Decision & Auto-Fix</p>
+                        <p class="pipe-desc">Rule-based and ML results are merged. Segments flagged by <i>both</i> get a 30% confidence boost. Each gap gets a severity rating (HIGH/MEDIUM/LOW) and an auto-fix suggestion with exact snap coordinates.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # ---- INTERACTIVE ONBOARDING TUTORIAL ----
+    render_onboarding()
+
+
+def render_onboarding():
+    """Interactive step-by-step tutorial that walks users through the app."""
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if 'onboarding_step' not in st.session_state:
+        st.session_state['onboarding_step'] = 0
+
+    step = st.session_state['onboarding_step']
+
+    tutorial_steps = [
+        {
+            'badge': 'Step 1 of 5',
+            'title': '📁 Upload Your Data',
+            'desc': (
+                'Look at the <b>sidebar on the left</b>. You\'ll see a file uploader — '
+                'drag and drop your <code>.wkt</code> file there. Or click the '
+                '<b>"🎯 Load Demo Data"</b> button to try with our built-in 56-segment street network. '
+                'This is where everything starts!'
+            ),
+        },
+        {
+            'badge': 'Step 2 of 5',
+            'title': '📊 Check the Dashboard Metrics',
+            'desc': (
+                'Once data is loaded, four metric cards appear at the top: <b>Segments</b> (total road count), '
+                '<b>Gaps Found</b> (detected errors), <b>High Severity</b> (critical gaps), and '
+                '<b>Dangling Nodes</b> (endpoints connected to only one road). '
+                'A quick glance tells you the overall health of your network.'
+            ),
+        },
+        {
+            'badge': 'Step 3 of 5',
+            'title': '🗺️ Explore the Map',
+            'desc': (
+                'The <b>Map tab</b> shows your road network interactively. '
+                '<b>Blue lines</b> = healthy roads. <b>Red/orange lines</b> = segments with gaps. '
+                '<b>Colored circle markers</b> = exact gap locations — click them for a detailed popup '
+                'explaining <i>what</i> the gap is, <i>how big</i> it is, and <i>why</i> it was flagged. '
+                'Use the <b>layer panel</b> (top-right) to toggle: Road Network, Gap Segments, and Gap Locations.'
+            ),
+        },
+        {
+            'badge': 'Step 4 of 5',
+            'title': '📋 Review the Gap Report',
+            'desc': (
+                'Switch to the <b>Gap Report tab</b> to see a sortable table of every detected gap: '
+                'which segment, which endpoint, the gap distance, severity (HIGH/MEDIUM/LOW), '
+                'and confidence percentage. You can <b>download</b> the report as CSV, JSON, or a text file.'
+            ),
+        },
+        {
+            'badge': 'Step 5 of 5',
+            'title': '🔧 Download the Auto-Fix',
+            'desc': (
+                'Go to the <b>Auto-Fix tab</b> to see exactly how each gap should be corrected. '
+                'The system calculates the nearest snap point on the neighboring segment and shows '
+                'the original vs. corrected coordinates. Click <b>"Download Corrected .wkt"</b> '
+                'to get a fixed version of your road network with all gaps snapped closed!'
+            ),
+        },
+    ]
+
+    if step < len(tutorial_steps):
+        s = tutorial_steps[step]
+        st.markdown(f"""
+            <div class="onboarding-overlay">
+                <div class="onboarding-step-badge">{s['badge']}</div>
+                <h3 class="onboarding-title">{s['title']}</h3>
+                <p class="onboarding-desc">{s['desc']}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if step > 0:
+                if st.button("← Previous", key="onboard_prev"):
+                    st.session_state['onboarding_step'] = step - 1
+                    st.rerun()
+        with col2:
+            if st.button("Skip Tutorial", key="onboard_skip"):
+                st.session_state['onboarding_step'] = len(tutorial_steps)
+                st.rerun()
+        with col3:
+            if step < len(tutorial_steps) - 1:
+                if st.button("Next →", key="onboard_next"):
+                    st.session_state['onboarding_step'] = step + 1
+                    st.rerun()
+            else:
+                if st.button("✅ Finish", key="onboard_finish"):
+                    st.session_state['onboarding_step'] = len(tutorial_steps)
+                    st.rerun()
+    else:
+        # Tutorial completed — show a small restart link
+        if st.button("🔄 Restart Tutorial", key="onboard_restart"):
+            st.session_state['onboarding_step'] = 0
+            st.rerun()
 
 
 def render_sidebar() -> Tuple[Optional[str], float]:
@@ -1211,6 +1459,35 @@ def main():
             st.markdown('<div class="map-container">', unsafe_allow_html=True)
             st_folium(create_map(lines, all_issues), height=550, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # Map layer legend / explanation
+            st.markdown("""
+                <div class="legend-box">
+                    <p class="legend-title">🗂️ Map Layer Guide — What Each Control Means</p>
+                    <div class="legend-grid">
+                        <div class="legend-item">
+                            <div class="legend-swatch" style="background:#1a1a2e;"></div>
+                            <div class="legend-label"><b>cartodbdarkmatter</b> — Dark base map theme for better contrast with colored road segments</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-swatch" style="background:#f5f5f5;border:1px solid #ccc;"></div>
+                            <div class="legend-label"><b>Light</b> — Light/minimal base map theme, easier on the eyes for detailed inspection</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-swatch" style="background:#60a5fa;"></div>
+                            <div class="legend-label"><b>Road Network</b> — All healthy road segments with no detected gaps (shown in blue)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-swatch" style="background:#ef4444;"></div>
+                            <div class="legend-label"><b>Gap Segments</b> — Road segments that have a broken endpoint connection (red = high, orange = medium severity)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-swatch" style="background:#ef4444;border-radius:50%;"></div>
+                            <div class="legend-label"><b>Gap Locations</b> — Circle markers at exact gap positions. Click for details on why it's an error and how to fix it</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
         with tab2:
             st.markdown("""<div class="section-header"><span class="icon">🔗</span><h3>Detected Endpoint Gaps</h3></div>""", unsafe_allow_html=True)
