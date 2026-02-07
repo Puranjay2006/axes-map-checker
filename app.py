@@ -378,7 +378,7 @@ CUSTOM_CSS = """
 
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
 
-    /* Hide sidebar collapse button icon text leak ("keyboard_double_arrow_left") */
+    /* Hide ALL Material Icon text leaks (keyboard_double_arrow, expand_more, etc.) */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="collapsedControl"] button { font-size: 0 !important; line-height: 0 !important; overflow: hidden !important; }
     [data-testid="stSidebarCollapseButton"] button svg,
@@ -387,6 +387,15 @@ CUSTOM_CSS = """
     [data-testid="collapsedControl"] button span { font-size: 0 !important; display: none !important; }
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] { background: transparent !important; }
+
+    /* Hide Material Icon text in expander toggle buttons */
+    [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"],
+    [data-testid="stExpander"] details summary span:first-child { font-size: 0 !important; overflow: hidden !important; width: 20px !important; height: 20px !important; display: inline-block !important; }
+    [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
+
+    /* Hide ALL stIcon material icon text leaks globally */
+    .stIcon, [data-testid="stIconMaterial"] { font-size: 0 !important; overflow: hidden !important; }
+    .stIcon svg, [data-testid="stIconMaterial"] svg { font-size: 20px !important; width: 20px !important; height: 20px !important; }
 
     /* Force ALL text in main content area to be dark — override any inherited light colors */
     .main * { color: var(--gray-800) !important; }
