@@ -1239,9 +1239,19 @@ def render_welcome():
             </div>
         </div>
     """, unsafe_allow_html=True)
-    with st.expander("📖 Supported Format"):
-        st.code("LINESTRING(x1 y1, x2 y2, x3 y3, ...)\nLINESTRING(x1 y1, x2 y2, ...)", language="text")
-        st.markdown("Each line is a valid WKT LINESTRING. Coordinates in any projected CRS.")
+
+    # Supported format — pure HTML instead of st.expander to avoid styling issues
+    st.markdown("""
+        <div style="background:white;border-radius:20px;padding:1.5rem 2rem;margin-top:1.25rem;
+                    border:1px solid rgba(99,102,241,0.12);box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+            <h4 style="color:#1e293b;margin:0 0 0.75rem;font-weight:700;">📖 Supported Format</h4>
+            <div style="background:#f1f5f9;border-radius:12px;padding:1rem 1.25rem;font-family:monospace;font-size:0.88rem;color:#334155;line-height:1.7;">
+                LINESTRING(x1 y1, x2 y2, x3 y3, ...)<br>
+                LINESTRING(x1 y1, x2 y2, ...)
+            </div>
+            <p style="color:#475569;font-size:0.9rem;margin:0.75rem 0 0;">Each line is a valid WKT LINESTRING. Coordinates in any projected CRS.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
     # ---- HOW IT WORKS ----
     st.markdown("""
